@@ -1,0 +1,29 @@
+\section{HPC-Specific Attack Surface Taxonomy}
+\label{sec:taxonomy}
+
+General agent-security work already covers the \emph{mechanism} dimension of these attacks (injection, poisoning, protocol exploits --- Section~\ref{sec:background-agentsec}). What is missing is the HPC-specific \emph{surface} through which the mechanism reaches the agent and the \emph{consequence} that follows. We separate the two deliberately, because equating every injection channel with the same outcome collapses distinctions --- data theft, resource abuse, and silent scientific corruption --- that matter differently to different stakeholders (a PI cares about corrupted results in a way a security team cares about credential theft).
+
+\subsection{Shared parallel-filesystem poisoning}
+\label{sec:taxonomy-filesystem}
+
+HPC storage is durable and shared across jobs, users, and time in a way that a web session's context window is not. An adversarial instruction written into a shared scratch path, a cache, or a collaboration directory can wait --- persisting past the job or session that created it --- for any later agent, possibly belonging to a different user, to read it. This is a fundamentally different persistence model from a single poisoned document in an email inbox.
+
+\subsection{Scheduler-induced co-location and log injection}
+\label{sec:taxonomy-scheduler}
+
+Job stdout/stderr, \texttt{sacct}-style accounting notes, and wrapper diagnostics are scheduler-adjacent text that an HPC agent is \emph{expected} to read as part of its job --- diagnosing a failure requires reading the failure's own output. An attacker who can influence what a co-located or related job writes to shared or predictable output paths gains a channel directly into the debugging agent's context, and the consequence is not limited to data exposure: it extends to submitting, resizing, or resubmitting jobs against the user's own allocation.
+
+\subsection{Tool, module, and MCP poisoning}
+\label{sec:tool-poisoning}
+
+HPC workflows depend on rich, often user- or community-maintained software stacks: environment modules, build tools, post-processing scripts, and increasingly MCP-based tool servers. Shi et al.'s demonstration that a tool's \emph{description} --- not just its output --- can be optimized to manipulate an agent's tool-selection process \cite{Shi2025ToolHijacker} maps directly onto this surface: a poisoned module description or MCP tool manifest can redirect an agent toward an attacker-preferred action without ever touching the agent's runtime output.
+
+\subsection{Cross-project data leakage}
+\label{sec:cross-project}
+
+A defining feature of HPC accounts is that a single user frequently has legitimate standing access to multiple projects or datasets, while any given task should touch only one. This is the concrete instantiation of the ``user-broad, task-narrow'' authority gap that Section~\ref{sec:threat-def} identifies as structural to the threat model, and it has no analogue in single-tenant consumer-agent settings.
+
+\subsection{Coordinated multi-agent exfiltration}
+\label{sec:taxonomy-multiagent}
+
+As multi-agent HPC workflows become more common --- planners delegating to worker agents, one agent preparing data for another \cite{Rosendo2025ORNL,Mondesire2025PEARC} --- a compromised or poisoned intermediate artifact written by one agent can be consumed by a second agent with different, and possibly broader, access. Data can then cross a trust boundary without any single agent's individual actions looking anomalous in isolation, and it can leave the cluster through a channel that is not obviously malicious: a normal, encrypted request to an LLM backend the agent is authorized to use.

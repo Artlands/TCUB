@@ -1,0 +1,6 @@
+\section{The Gap}
+\label{sec:gap}
+
+Putting Sections~\ref{sec:background-hpc}--\ref{sec:background-hpcsec} together: agentic-HPC research shows agents are being connected to real scheduler and filesystem resources, but treats adversarial robustness as future work rather than a present concern. LLM-agent security research shows that agents consuming untrusted content can be manipulated in serious ways, and has built benchmark methodology for measuring it, but has not modeled scheduler authority, project-scoped multi-tenancy, shared parallel storage, or scientific-integrity consequences. HPC security research shows that access, identity, and isolation can be rigorously engineered and audited, but assumes the authenticated actor's intent is trustworthy by construction.
+
+No existing work systematically characterizes what happens at the intersection: an LLM agent, holding valid HPC credentials and scheduler authority, redirected by content it encountered during normal, authorized operation. To the best of our knowledge, this is the first paper to make that intersection the primary object of study.

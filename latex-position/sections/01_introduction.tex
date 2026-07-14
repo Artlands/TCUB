@@ -1,0 +1,38 @@
+\section{Introduction}
+\label{sec:intro}
+
+HPC systems are becoming interactive scientific environments rather than purely batch-oriented ones. Users increasingly delegate routine but consequential work --- reading logs, repairing job scripts, installing software, summarizing large output directories, and steering multi-stage simulations --- to LLM agents that can read files, invoke command-line tools, call scheduler commands, and communicate with local or remote model backends. This is not speculative: agent frameworks have already been connected to real HPC resource managers and tested on production-scale scientific workflows \cite{Ma2025HPCAgent,Rosendo2025ORNL,Dawson2026LARA}, multi-agent systems have been used to automate HPC software compilation and deployment \cite{Mondesire2025PEARC}, and HPC centers are already publishing user guidance about agentic coding tools appearing on their clusters \cite{AaltoSciComp2026}. The trajectory is toward more autonomy, not less.
+
+This creates a security problem that does not fit cleanly into either of the two bodies of work that study its component parts.
+
+LLM-agent security research has established that agents which consume untrusted external content can be manipulated through indirect prompt injection \cite{Greshake2023PromptInjection}, that tool-using agents fail in high-stakes ways even when reasonably careful \cite{Ruan2024ToolEmu}, that these failures can be measured with realistic tasks and adaptive attacks \cite{Debenedetti2024AgentDojo}, and that the attack surface extends to tool selection \cite{Shi2025ToolHijacker} and inter-agent/inter-protocol communication \cite{Ferrag2025ProtocolExploits,Wang2026PILandscape}. But the settings in which this is studied --- email clients, e-banking, travel booking, Slack, generic tool sandboxes --- do not have schedulers, shared parallel filesystems, project-scoped multi-tenant storage, or the notion that a valid user account may span multiple projects while a given task should not.
+
+HPC security research has, separately, built mature answers to ``who can access what'': zone-based reference architectures for access, management, compute, and storage \cite{NIST2024SP800223}; enforced per-user separation of processes, filesystem access, network traffic, and accelerators \cite{Prout2024UserSeparation}; and federated identity and zero-trust designs that unify authentication and access control across AI and HPC infrastructure \cite{Alam2024ZeroTrust}. All of this assumes that the entity making a decision behind an authenticated session is a human, or software the human directly and deterministically controls. None of it asks whether a \emph{sequence of authorized actions}, taken by software that reads adversarial content as part of its normal operation, correctly reflects what the user or the site intended.
+
+The hijacked authorized agent threat model exists in the space between these two literatures: \textbf{the identity is real, the credentials are valid, the authorization is technically correct --- and the behavior is not what anyone intended.}
+
+\subsection{Thesis}
+\label{sec:thesis}
+
+We argue three things in this paper:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{The threat is structurally different from generic prompt injection}, because HPC introduces authority and persistence dimensions --- scheduler-mediated resource consumption, multi-project account scope, shared and durable parallel-filesystem state, and scientific-integrity/provenance requirements --- that general agent-security settings do not have and that determine what ``unsafe'' even means in this domain.
+  \item \textbf{Neither literature currently measures it.} LLM-agent security benchmarks do not model scheduler authority or shared HPC storage; HPC security controls do not model semantic redirection of an authenticated agent.
+  \item \textbf{The gap is closing on its own schedule, not ours.} HPC agents are being deployed for real workflows now \cite{Ma2025HPCAgent,Rosendo2025ORNL,Mondesire2025PEARC,AaltoSciComp2026}, and site operators are already worried enough to write informal guidance about it \cite{AaltoSciComp2026}, which means the research community has a limited window to characterize the threat before ad hoc, under-evaluated mitigations become the de facto standard.
+\end{enumerate}
+
+\subsection{Contributions}
+\label{sec:contributions}
+
+\begin{enumerate}[leftmargin=*]
+  \item A precise definition of the \textbf{hijacked authorized agent} threat model for HPC, distinguishing it from conventional privilege escalation and from generic indirect prompt injection (Section~\ref{sec:threat-model}).
+  \item A \textbf{taxonomy of HPC-specific attack surfaces}: shared parallel-filesystem poisoning, scheduler-induced log and co-location channels, tool/module/MCP poisoning, cross-project data leakage, and coordinated multi-agent exfiltration (Section~\ref{sec:taxonomy}).
+  \item A \textbf{defense-gap analysis} showing which existing HPC and agent-security controls detect, partially detect, or miss each attack surface (Section~\ref{sec:defense-gap}).
+  \item A \textbf{research agenda}, including the security requirements a trustworthy HPC-agent platform would need to satisfy, and a pointer to an empirical benchmark (HPC-AgentSec) now under development to measure the problem this paper defines (Section~\ref{sec:research-agenda}).
+\end{enumerate}
+
+\subsection{Scope and non-goals}
+\label{sec:scope}
+
+This paper is a threat characterization and research agenda, not an empirical evaluation. It does not report attack success rates, does not claim a specific model or agent framework is unsafe, and does not propose a complete defense. It also does not attempt to cover model-training-time poisoning, weight extraction, GPU microarchitectural side channels, kernel/hypervisor compromise, or general content-safety jailbreaking --- these are real concerns but orthogonal to the specific claim here, which is about environment-mediated redirection of an agent that already holds valid credentials.

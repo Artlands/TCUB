@@ -1,0 +1,34 @@
+\section{Research Agenda}
+\label{sec:research-agenda}
+
+\subsection{Security requirements for HPC-agent platforms}
+\label{sec:requirements}
+
+The gap analysis in Section~\ref{sec:defense-gap} motivates a concrete list of properties an HPC-agent platform would need in order to make hijacked-agent incidents detectable or preventable, rather than indistinguishable from legitimate broad-account activity:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Task-scoped authority}, enforced independently of the account's standing access --- the platform must be able to represent and check ``permitted for this task'' as distinct from ``permitted for this account.''
+  \item \textbf{Provenance-aware context handling} --- every piece of content entering an agent's context (user instruction, file content, tool output, peer-agent message) should carry a trust/source label the agent's decision process can condition on.
+  \item \textbf{Egress control} for agent-to-model traffic, since data can leave through a channel --- an LLM API call --- that is authorized and encrypted by default and therefore invisible to conventional network monitoring aimed at exfiltration.
+  \item \textbf{Shared-filesystem hygiene}, given that scratch and collaboration storage persists adversarial content across jobs, users, and agents in a way session-scoped web contexts do not.
+  \item \textbf{Tool and module trust}, extending existing software-supply-chain practice to cover tool \emph{descriptions} and MCP manifests, not just binaries.
+  \item \textbf{Scheduler-aware containment}, so that a hijacked agent cannot translate a context-level compromise into unbounded resource consumption against the user's allocation.
+  \item \textbf{Cross-agent correlation}, so that staged, multi-hop exfiltration across cooperating agents is visible as a single event rather than several individually unremarkable ones.
+\end{itemize}
+
+\subsection{Toward a benchmark: HPC-AgentSec}
+\label{sec:benchmark}
+
+A threat model and a taxonomy motivate but do not by themselves measure anything. The natural next step --- already underway as a companion effort --- is an empirical benchmark that operationalizes Sections~\ref{sec:threat-model} and~\ref{sec:taxonomy} into realistic tasks, task-scoped policies, injected attack cases, deterministic security oracles, and joint utility/security metrics, following the general methodology established by AgentDojo \cite{Debenedetti2024AgentDojo} but built around HPC-native semantics: Slurm-mediated scheduler actions, project-scoped filesystem policy, and scientific-integrity oracles that check for silent parameter, filter, or provenance tampering rather than only data exposure. That effort (working name \textbf{HPC-AgentSec}; see the companion benchmark paper draft and development plan in the same project repository) is scoped to answer, empirically, the questions this position paper raises analytically: how often current agents follow adversarial HPC context, which infrastructure surfaces are highest-risk, and which existing or proposed controls actually reduce risk without destroying utility.
+
+\subsection{Open questions}
+\label{sec:open-questions}
+
+Beyond the benchmark itself, several questions remain open and are, in our view, worth independent study:
+
+\begin{itemize}[leftmargin=*]
+  \item How should ``task scope'' be authored and validated when it is inherently somewhat subjective, and how much does that subjectivity affect the reliability of security measurements built on it?
+  \item Do defenses that work well in web/enterprise agent settings (structured provenance labels, tool allowlists) transfer to HPC's scheduler and filesystem semantics, or do they need HPC-specific redesign?
+  \item What is the right locus of enforcement --- the agent framework, the scheduler, the filesystem, or a dedicated runtime monitor --- for task-scoped policy, given that HPC sites differ widely in what they can modify?
+  \item As multi-agent scientific workflows become more common, how should cross-agent trust be represented so that staged exfiltration is detectable without requiring every agent to fully trust every other agent's output?
+\end{itemize}

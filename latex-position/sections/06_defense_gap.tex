@@ -1,0 +1,22 @@
+\section{Why Existing Controls Are Insufficient}
+\label{sec:defense-gap}
+
+Table~\ref{tab:defense-gap} maps established HPC and agent-monitoring controls against what they verify and what they miss for a hijacked authorized agent. The pattern across every row is the same: existing HPC controls are built to answer ``was this action within the account's authority,'' and they answer it correctly. They are not built to answer ``was this action within the \emph{task's} authority,'' which is the question the hijacked authorized agent threat model raises, and none of the standard audit surfaces --- accounting logs, POSIX ACLs, network allowlists --- carry the information needed to answer it after the fact unless the agent framework itself records task-scoped provenance as a first-class signal.
+
+\begin{table}[H]
+\centering
+\caption{Existing HPC and agent-monitoring controls versus what they miss for hijacked authorized agents.}
+\label{tab:defense-gap}
+\begin{tabularx}{\linewidth}{@{} X X X @{}}
+\toprule
+\textbf{Existing control} & \textbf{What it verifies} & \textbf{What it misses for hijacked agents} \\
+\midrule
+Authentication / SSO / zero-trust identity \cite{Alam2024ZeroTrust} & Who is the user & Whether the \emph{intent} behind an authenticated action was the user's or was injected \\
+POSIX permissions, zone-based access architecture \cite{NIST2024SP800223} & Which files/zones the account may reach & Whether the \emph{task} should reach them, when the account legitimately can \\
+Scheduler accounting and quotas & How much was consumed and by whom & Whether the consumption was requested by the user or induced by poisoned content \\
+Enforced user/process/network separation \cite{Prout2024UserSeparation} & Isolation between different users' work & Redirection \emph{within} one user's own authorized session \\
+Filesystem/network auditing, DLP & What left, over which channel & Egress through a channel the agent is authorized to use, e.g.\ a normal LLM API call \\
+Per-agent action logging & What the agent did & \emph{Why} --- whether an action traces to legitimate task intent or to adversarial content the agent consumed \\
+\bottomrule
+\end{tabularx}
+\end{table}

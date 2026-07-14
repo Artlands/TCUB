@@ -1,0 +1,78 @@
+% ============================================================
+% Trusted Credentials, Untrusted Behavior:
+% A Case for Studying Hijacked Authorized Agents in HPC
+% Position / vision paper -- arXiv preprint source
+%
+% Structure: this file holds the preamble, title block, and
+% document skeleton only. Each section of the paper lives in
+% its own file under sections/ and is pulled in via \input.
+%
+% Compile (pdflatex + bibtex):
+%   pdflatex main.tex
+%   bibtex main
+%   pdflatex main.tex
+%   pdflatex main.tex
+% ============================================================
+
+\documentclass[11pt]{article}
+
+% === Core packages ===
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{float}
+\usepackage{enumitem}
+
+% === Citations: numeric, order of appearance (matches the
+% bracketed [1]-[14] style used in the source draft) ===
+\usepackage{cite}
+
+% === Links (load after cite, before xurl) ===
+\usepackage{hyperref}
+\usepackage{xurl}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=black,
+    urlcolor=blue,
+    pdftitle={Trusted Credentials, Untrusted Behavior: A Case for Studying Hijacked Authorized Agents in HPC},
+    pdfauthor={Jie Li}
+}
+
+% === Title block ===
+\title{Trusted Credentials, Untrusted Behavior: \\
+  A Case for Studying Hijacked Authorized Agents in HPC
+  \thanks{Position/vision paper.}}
+
+\author{
+  Jie Li \\
+  \small Texas Tech University \\
+  \small \href{mailto:jie.li@ttu.edu}{jie.li@ttu.edu}
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\input{sections/00_abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_background}
+\input{sections/03_gap}
+\input{sections/04_threat_model}
+\input{sections/05_taxonomy}
+\input{sections/06_defense_gap}
+\input{sections/07_research_agenda}
+\input{sections/08_conclusion}
+
+\bibliographystyle{unsrt}
+\bibliography{references}
+
+\end{document}

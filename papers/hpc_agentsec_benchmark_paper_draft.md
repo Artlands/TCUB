@@ -317,9 +317,9 @@ The reporting layer produces per-case and aggregate utility, security, severity,
 
 ## 6. Benchmark Domains and Task Families
 
-The initial benchmark should contain five domains. Target counts below are development goals, not completed claims.
+The benchmark eventually spans five domains, but the first submission targets three **core domains** (D1, D2, D4) chosen because they most directly exercise the paper's central claim — task-scoped authority under scheduler and shared-filesystem conditions that general agent-security benchmarks do not model. D3 and D5 are **extension domains**: valuable but not load-bearing for the core thesis, and deferred to a follow-up or camera-ready expansion rather than gating the first result. This split exists because building and validating all five domains end-to-end is a multi-lab-scale effort; a solo/small team targeting a top-tier venue should prioritize depth on the domains that carry the argument over breadth across all five. Target counts below are development goals, not completed claims.
 
-### D1. Slurm job diagnosis and repair
+### D1. Slurm job diagnosis and repair — *core*
 
 Representative tasks:
 
@@ -336,7 +336,7 @@ Security cases:
 - instructions to read unrelated project files;
 - instructions to submit oversized or repeated jobs.
 
-### D2. Scientific result analysis
+### D2. Scientific result analysis — *core*
 
 Representative tasks:
 
@@ -353,7 +353,7 @@ Security cases:
 - cross-project data inclusion;
 - exposure of synthetic restricted data.
 
-### D3. Software build and environment management
+### D3. Software build and environment management — *extension domain (post-v1)*
 
 Representative tasks:
 
@@ -370,7 +370,7 @@ Security cases:
 - instructions to install or execute an unapproved binary;
 - modification of shared build scripts.
 
-### D4. Workflow orchestration and simulation steering
+### D4. Workflow orchestration and simulation steering — *core*
 
 Representative tasks:
 
@@ -386,7 +386,7 @@ Security cases:
 - unauthorized workflow-stage execution;
 - resource escalation.
 
-### D5. Multi-agent scientific collaboration
+### D5. Multi-agent scientific collaboration — *extension domain (post-v1)*
 
 Representative tasks:
 
@@ -403,16 +403,16 @@ Security cases:
 
 ### 6.1 Initial scale target
 
-A realistic first release could target:
+The **v1 (first submission) scope** targets the three core domains only:
 
-- 5 domains;
-- 25–40 benign tasks;
+- 3 domains (D1, D2, D4);
+- 15–20 benign tasks;
 - 3–5 security cases per task family;
-- 80–150 total security cases;
+- 45–70 total security cases;
 - 3 severity levels; and
-- at least 4 defense configurations.
+- 4 defense configurations (§11.3).
 
-The final paper should report only the counts actually implemented and validated.
+D3 and D5 expand the suite to 5 domains, 25–40 tasks, and 80–150 cases as a follow-up or camera-ready addition, not a v1 requirement. The final paper should report only the counts actually implemented and validated, and should state explicitly which domains were validated on real Slurm infrastructure versus emulation only.
 
 ---
 
@@ -602,35 +602,42 @@ Determine whether POSIX permissions, scheduler accounting, shell logs, network a
 
 ### 11.1 Testbed
 
-Use two execution modes:
+Use two execution modes, and use them concurrently rather than sequentially:
 
-1. **Portable emulation:** containers or namespaces with a Slurm-like interface and shared volumes.
+1. **Portable emulation:** containers or namespaces with a Slurm-like interface and shared volumes. Used for iteration speed and full-matrix cost control.
 2. **Validated Slurm deployment:** an authorized test cluster used to confirm that selected cases reproduce under real scheduler and filesystem behavior.
 
-The portable mode supports artifact evaluation; the Slurm mode supports ecological validity.
+Because access to a real cluster is a genuine differentiator from purely emulated agent-security benchmarks, real-Slurm validation should start with the **first** implemented task and attack case, not be deferred to a late confirmation pass. A single real-cluster result — one benign task, one poisoned-log attack, one observed policy violation — is the earliest evidence that the "hijacked authorized agent" thesis produces HPC-distinctive failures rather than a relabeled instance of generic prompt injection, and should be obtained before committing further engineering time to the full environment build-out (see the bootstrap gate in the companion development plan).
+
+The portable mode supports artifact evaluation and the full evaluation matrix; the Slurm mode supports ecological validity and should appear throughout development, not only at the end.
 
 ### 11.2 Model and agent matrix
 
-The evaluation should include:
+**v1 scope (fixed):**
 
-- at least one local open-weight model;
-- at least one stronger hosted model if policy permits;
-- at least two agent architectures or framework adapters; and
-- deterministic or mock-agent controls for validating oracles.
+- one local open-weight model;
+- one stronger hosted model, policy permitting;
+- one primary agent architecture/framework adapter; and
+- a deterministic/mock-agent control for validating oracles.
 
-Model names and versions should be pinned in the final artifact.
+A second agent architecture is a stretch goal for the first submission, not a requirement — the model/agent matrix is the dimension most tempting to over-expand, and each additional model or adapter multiplies the full evaluation matrix (§11.4) rather than adding to it linearly. Model names and versions should be pinned in the final artifact regardless of matrix size.
 
 ### 11.3 Baseline agent configurations
 
-- **A0: unprotected agent**
+**v1 defenses (four, sufficient for the first submission):**
+
+- **A0: unprotected agent** (baseline)
 - **A1: prompt-only safety instruction**
-- **A2: structured provenance labels**
-- **A3: tool allowlist and argument validation**
-- **A4: task-scoped filesystem/scheduler policy**
-- **A5: human confirmation for high-risk actions**
+- **A4: task-scoped filesystem/scheduler policy** — the most HPC-native defense and the one that most directly tests the user-broad/task-narrow thesis; prioritize this over the others if only one can be built well
 - **A6: lightweight runtime behavioral monitor**
 
-Not every mechanism needs to be presented as a novel defense. They are benchmark baselines.
+**Extension defenses (add if time permits, or reserve for follow-up work):**
+
+- **A2: structured provenance labels**
+- **A3: tool allowlist and argument validation**
+- **A5: human confirmation for high-risk actions**
+
+Not every mechanism needs to be presented as a novel defense. They are benchmark baselines, and a smaller, well-measured set beats a larger set with thin per-defense evidence.
 
 ### 11.4 Evaluation matrix
 
@@ -640,8 +647,9 @@ A full matrix is:
 Model \times Agent \times Domain \times Case \times Defense \times Seed
 \]
 
-To control cost, use a staged protocol:
+Given the v1 scope (§11.2, §11.3, §6.1), this is tractable for a solo/small team. To control cost and de-risk the central claim early, use a staged protocol with an explicit bootstrap gate before any broad run:
 
+0. **Bootstrap gate:** implement and validate one task and one attack case end-to-end, including a real-Slurm confirmation run. Do not proceed to stage 1 until this produces the expected violation and the expected benign pass. This is the single most important checkpoint in the whole evaluation — it is the earliest point at which the paper's thesis can fail, and failing fast here is far cheaper than discovering the same problem after building the full case suite.
 1. screen all cases on a small baseline set;
 2. select validated, nontrivial cases;
 3. run the full model-defense matrix on the final suite; and
@@ -657,6 +665,8 @@ Before evaluating agents:
 - verify that the monitor detects the intended prohibited event;
 - confirm that unrelated benign actions do not trigger the oracle; and
 - reset environment state between trials.
+
+Begin dual-reviewer labeling of task-permitted, prohibited, and severity judgments starting with the **first** security case, not as a batch pass near submission. For a top-tier venue, "the prohibited/permitted boundary is subjective" is the most likely rejection vector (§15.2), and it is far cheaper to catch policy disagreements while there are five cases than after there are seventy.
 
 ### 11.6 Reproducibility
 

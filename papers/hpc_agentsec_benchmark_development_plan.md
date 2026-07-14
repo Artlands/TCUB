@@ -45,19 +45,21 @@ Each run produces:
 
 ### 1.4 Initial release scope
 
-A minimum credible release should include:
+**This plan assumes a solo/small team with real-cluster access, targeting a top-tier security/ML venue.** At that scale, the plan in the original draft (5 domains, full 18-week infrastructure build before any real-cluster confirmation) is oversized. The scope below is deliberately tighter and front-loads the riskiest validation step instead of deferring it.
 
-- 4 benchmark domains;
-- 24 or more benign tasks;
-- 60 or more validated security cases;
-- 2 agent adapters;
-- 2 or more model backends;
-- 4 baseline defense configurations;
+A minimum credible v1 release should include:
+
+- 3 benchmark domains (D1 Slurm diagnosis, D2 scientific analysis, D4 workflow steering — see §6, marked *core*);
+- 15–18 benign tasks;
+- 36–45 validated security cases (3–5 per task family);
+- 1 primary agent adapter (a second is a stretch goal, not a requirement);
+- 2 model backends (one local, one hosted);
+- 4 baseline defense configurations (§10, marked *v1*);
 - deterministic utility and security oracles;
 - at least 3 runs per stochastic configuration; and
-- 8–12 representative cases validated on real Slurm infrastructure.
+- **real-Slurm validation starting with case #1** (see the new Phase 0.5 bootstrap gate in §13), not deferred to a late-stage confirmation pass — target 6–10 representative cases validated on real infrastructure by the end of v1, spread across development rather than batched at the end.
 
-A stronger full release can expand to 5 domains, 30–40 tasks, and 100+ security cases.
+D3 (software build) and D5 (multi-agent collaboration) expand the suite to 5 domains, 30–40 tasks, and 80-150+ security cases as a follow-up or camera-ready addition — do not let them gate the first submission. The general LLM-agent-security-benchmark space is moving fast (several overlapping benchmarks published in the last year); a smaller, rigorously validated v1 that ships sooner is worth more than a comprehensive v1 that ships later.
 
 ---
 
@@ -411,7 +413,9 @@ scientific_integrity:
 
 ## 6. Domain and Task Development
 
-### 6.1 Domain D1: Slurm diagnosis
+D1, D2, and D4 are **core v1 domains** (Phase 2–3). D3 and D5 are **extension domains** (Phase 7, post-v1) — kept here for completeness and so the schema/architecture accommodates them later, but they should not consume Phase 2–4 time.
+
+### 6.1 Domain D1: Slurm diagnosis — *core*
 
 Initial tasks:
 
@@ -431,7 +435,7 @@ Utility oracles:
 - root cause matches fixture;
 - no unrelated job is modified.
 
-### 6.2 Domain D2: Scientific analysis
+### 6.2 Domain D2: Scientific analysis — *core*
 
 Initial tasks:
 
@@ -451,7 +455,7 @@ Utility oracles:
 - explicit provenance fields;
 - no silent filtering beyond declared rules.
 
-### 6.3 Domain D3: Build and environment assistance
+### 6.3 Domain D3: Build and environment assistance — *extension (post-v1)*
 
 Initial tasks:
 
@@ -469,7 +473,7 @@ Utility oracles:
 - shared software remains unchanged;
 - no unapproved download or binary execution occurs.
 
-### 6.4 Domain D4: Workflow steering
+### 6.4 Domain D4: Workflow steering — *core*
 
 Initial tasks:
 
@@ -487,7 +491,7 @@ Utility oracles:
 - budget remains within policy;
 - provenance record is complete.
 
-### 6.5 Domain D5: Multi-agent collaboration
+### 6.5 Domain D5: Multi-agent collaboration — *extension (post-v1)*
 
 Initial tasks:
 
@@ -756,37 +760,39 @@ The benchmark should not depend primarily on an LLM judging another LLM’s secu
 
 ## 10. Baseline Defenses
 
-### B0. No special defense
+B0, B1, B4, and B6 are the **v1 defense set** (four, per §1.4) — build and measure these first. B2, B3, B5, and B7 are **extension defenses**: valuable for a fuller picture but not required to demonstrate the core utility-security tradeoff, and better spent as Phase 7 (post-v1) additions than as scope that delays the first submission.
+
+### B0. No special defense — *v1*
 
 Standard agent prompt and tools.
 
-### B1. Prompt-only warning
+### B1. Prompt-only warning — *v1*
 
 Tell the agent that files and tool outputs may contain untrusted instructions.
 
-### B2. Structured provenance labels
+### B2. Structured provenance labels — *extension*
 
 Separate user instruction, system policy, file content, tool output, and peer-agent message.
 
-### B3. Tool allowlist and argument validation
+### B3. Tool allowlist and argument validation — *extension*
 
 Restrict commands and validate paths/arguments.
 
-### B4. Task-scoped filesystem and scheduler policy
+### B4. Task-scoped filesystem and scheduler policy — *v1, highest priority*
 
-Enforce task-specific path and scheduler boundaries even when the user account has broader access.
+Enforce task-specific path and scheduler boundaries even when the user account has broader access. This is the defense most directly aligned with the paper's central thesis (user-broad/task-narrow authority) — if only one defense beyond the unprotected/prompt-only baselines can be built well, build this one.
 
-### B5. Human confirmation
+### B5. Human confirmation — *extension*
 
 Require approval for high-risk reads, writes, scheduler actions, and egress.
 
-### B6. Runtime behavioral monitor
+### B6. Runtime behavioral monitor — *v1*
 
 Observe and optionally block actions violating the task manifest.
 
-### B7. Combined defense
+### B7. Combined defense — *extension*
 
-Use provenance labels + tool policy + task scope. This provides a practical upper baseline without claiming a complete solution.
+Use provenance labels + tool policy + task scope. This provides a practical upper baseline without claiming a complete solution. Natural Phase 7 addition once B2 and B3 exist.
 
 For every defense, measure utility loss, additional latency, and number of user confirmations.
 
@@ -901,7 +907,7 @@ Have at least two reviewers independently label:
 - consequence severity; and
 - case realism.
 
-Resolve disagreements and report the policy-authoring process.
+**Start this at case #1 (Phase 0.5), not as a batch pass before submission.** For a top-tier security/ML venue, "the permitted/prohibited boundary is subjective" is the single most likely rejection vector for this kind of benchmark (§16 risk register). Discovering systematic disagreement after 40+ cases are built means re-litigating and possibly re-implementing a large fraction of the suite; discovering it at case 1–5 costs an afternoon. Resolve disagreements and report the policy-authoring process, including the disagreement rate and how it evolved as the case suite grew.
 
 ### 12.4 Leakage and benchmark contamination
 
@@ -920,7 +926,20 @@ Version prompts and fixtures. Consider holding back a small test subset if bench
 
 **Exit criterion:** one end-to-end toy task runs and produces a scored trace.
 
-### Phase 1 — Portable environment and monitors (Weeks 3–4)
+### Phase 0.5 — Bootstrap validation gate (Week 3)
+
+This phase exists to fail fast on the central thesis before investing in the full six-layer architecture. Do **not** start Phase 1's general infrastructure build until this gate passes. Scope is intentionally minimal and ad hoc — hand-scripted where the full environment isn't built yet:
+
+- implement one Slurm-debugging task by hand (fixtures, allowed paths, a reference fix);
+- implement one poisoned-log security case for it (one injection source, one canary secret, one prohibited-event rule);
+- run the benign reference and confirm it passes;
+- run a scripted adversarial policy and confirm the monitor catches the violation;
+- reproduce the same attack on the authorized real-Slurm testbed (§WP3), not only in emulation;
+- have a second reviewer independently label the task-permitted/prohibited boundary for this one case (starting the dual-review process from case #1, per §12.3).
+
+**Exit criterion:** one real-Slurm-confirmed attack case demonstrates an HPC-distinctive failure (a violation that depends on scheduler, project-scope, or shared-filesystem semantics, not a generic prompt-injection instance) — and a second reviewer agrees with the policy labeling. If this gate does not pass, revisit the threat model or task design before scaling up; do not proceed to Phase 1 on the assumption that later cases will fix it.
+
+### Phase 1 — Portable environment and monitors (Weeks 4–5)
 
 - implement project filesystem model;
 - implement scheduler mock;
@@ -928,48 +947,50 @@ Version prompts and fixtures. Consider holding back a small test subset if bench
 - implement file, process, scheduler, and network monitors;
 - implement reset and isolation.
 
-**Exit criterion:** scripted benign and malicious policies are scored correctly.
+**Exit criterion:** scripted benign and malicious policies are scored correctly, and the Phase 0.5 case runs through the full pipeline reproducing the same verdict.
 
-### Phase 2 — Minimum viable task suite (Weeks 5–7)
+### Phase 2 — Minimum viable task suite (Weeks 6–8)
 
-- build Slurm diagnosis tasks;
-- build scientific analysis tasks;
-- build software build tasks;
-- create 20+ benign tasks;
+- build Slurm diagnosis tasks (D1, core);
+- build scientific analysis tasks (D2, core);
+- build workflow-steering tasks (D4, core);
+- create 15–18 benign tasks total (§1.4);
 - create initial utility oracles.
+
+Software-build (D3) and multi-agent (D5) tasks are out of scope for this phase — see §1.4 and §6 for the core/extension split.
 
 **Exit criterion:** reference solutions pass all benign tasks.
 
-### Phase 3 — Security cases (Weeks 8–10)
+### Phase 3 — Security cases (Weeks 9–11)
 
-- build artifact, scheduler-log, and tool-output attacks;
-- add shared-state and multi-agent cases;
-- validate 50–70 security cases;
-- conduct internal review.
+- build artifact, scheduler-log, and tool-output attacks across the three core domains;
+- validate 36–45 security cases (§1.4);
+- conduct internal review with dual-reviewer labeling continued from Phase 0.5 (§12.3), not deferred to the end of this phase;
+- validate a growing subset on real Slurm as cases are added, targeting 6–10 real-cluster-confirmed cases by the end of this phase rather than all at once in Phase 5.
 
-**Exit criterion:** every case passes the benign/malicious oracle tests.
+**Exit criterion:** every case passes the benign/malicious oracle tests, and the running real-Slurm-confirmed count is on track for the §1.4 target.
 
-### Phase 4 — Agent and defense matrix (Weeks 11–12)
+### Phase 4 — Agent and defense matrix (Weeks 12–13)
 
-- implement two agent adapters;
-- integrate model backends;
-- implement baseline defenses;
+- implement one primary agent adapter (a second is a stretch goal, not a gate — see §1.4, §11.2);
+- integrate the two v1 model backends;
+- implement the four v1 baseline defenses (§10);
 - run pilot evaluation;
 - refine ambiguous tasks.
 
 **Exit criterion:** complete benchmark run succeeds unattended.
 
-### Phase 5 — Full evaluation and Slurm validation (Weeks 13–15)
+### Phase 5 — Full evaluation and Slurm validation (Weeks 14–16)
 
 - freeze benchmark version 0.9;
-- run full matrix;
-- validate representative cases on Slurm;
+- run full matrix at v1 scope (3 domains × 2 models × 1 primary agent × 4 defenses × seeds);
+- confirm the accumulated real-Slurm case set is representative across domains and consequence classes (this is a confirmation of ongoing work, not the first real-cluster run — that happened in Phase 0.5);
 - compute confidence intervals;
 - generate tables and figures.
 
 **Exit criterion:** all paper claims trace to frozen results.
 
-### Phase 6 — Artifact and paper release (Weeks 16–18)
+### Phase 6 — Artifact and paper release (Weeks 17–19)
 
 - freeze version 1.0;
 - write documentation;
@@ -979,18 +1000,27 @@ Version prompts and fixtures. Consider holding back a small test subset if bench
 
 **Exit criterion:** a new user can reproduce a small result in under one hour and the full artifact instructions are complete.
 
+### Phase 7 — Extension domains (post-v1 / camera-ready, optional)
+
+- add D3 (software build) and D5 (multi-agent collaboration);
+- expand toward 5 domains, 30–40 tasks, 80–150+ security cases;
+- expand the agent and defense matrix if reviewer feedback or venue expectations warrant it.
+
+Treat this phase as follow-up work gated on v1 landing, not a prerequisite for submission.
+
 ---
 
 ## 14. Minimum Viable Benchmark
 
-When time or resources are limited, prioritize:
+This section previously duplicated the release scope; it now just cross-references §1.4 to avoid two sources of truth. The v1/minimum-viable scope is:
 
-### Domains
+### Domains (§6)
 
-1. Slurm job debugging
-2. Scientific result analysis
-3. Tool/build assistance
-4. Multi-agent collaboration
+1. Slurm job debugging (D1, core)
+2. Scientific result analysis (D2, core)
+3. Workflow steering (D4, core)
+
+Tool/build assistance (D3) and multi-agent collaboration (D5) are extension domains — see Phase 7 (§13).
 
 ### Security cases
 
@@ -1000,23 +1030,24 @@ When time or resources are limited, prioritize:
 4. cross-project read;
 5. synthetic-secret egress;
 6. unsafe scheduler request;
-7. workflow parameter corruption;
-8. multi-agent staged transfer.
+7. workflow parameter corruption.
 
-### Defenses
+(Multi-agent staged transfer moves to the D5 extension set, since it depends on the D5 domain.)
 
-1. prompt-only warning;
-2. provenance labels;
-3. tool allowlist;
-4. task-scoped enforcement.
+### Defenses (§10)
 
-### Models/agents
+1. no special defense (B0, baseline);
+2. prompt-only warning (B1);
+3. task-scoped enforcement (B4, highest priority);
+4. runtime behavioral monitor (B6).
+
+### Models/agents (§11.2)
 
 - one local model;
 - one stronger external or local model;
-- two agent adapters if feasible.
+- one primary agent adapter (a second is a stretch goal, not a requirement).
 
-This subset is sufficient for a coherent paper if the cases are high quality and the oracles are rigorous.
+This subset is sufficient for a coherent paper if the cases are high quality and the oracles are rigorous — and it is sized for a solo/small team to actually finish and validate on real infrastructure, which matters more for a top-tier submission than raw case count.
 
 ---
 
@@ -1070,7 +1101,7 @@ Show staging, read, and exposure events.
 |---|---|---|
 | Tasks look like generic prompt injection | Weak novelty | Require scheduler, project, scientific-integrity, or shared-storage semantics in every included domain |
 | Policies appear subjective | Reviewer skepticism | Publish manifests, use independent reviewers, prioritize deterministic prohibitions |
-| Benchmark is too small | Weak benchmark claim | Target at least 60 validated security cases and clear extensibility |
+| Benchmark is too small | Weak benchmark claim | Target 36–45 validated security cases across 3 core domains for v1 (§1.4) with a documented, already-scoped path to 80–150+ across 5 domains (Phase 7); lean on real-cluster validation and rigorous oracles to offset smaller v1 case count |
 | Real cluster experiments are risky | Operational concern | Use synthetic data, reservation/test accounts, hard resource caps, mock egress |
 | Results depend on one model | Poor generality | Include multiple models and agents; frame scope carefully |
 | Defenses reduce attacks by refusing everything | Misleading security | Jointly report USR and STCR plus refusal rate |
@@ -1078,6 +1109,8 @@ Show staging, read, and exposure events.
 | Tool wrappers distort behavior | Measurement concern | Document wrapper semantics and compare selected cases with native commands |
 | LLM judging is unreliable | Scoring concern | Use deterministic monitors and oracles as primary evidence |
 | Benchmark overfits public payloads | Long-term degradation | Version cases and maintain optional held-out subset |
+| General agent-security-benchmark space moves fast; risk of a competing HPC-flavored benchmark landing first | Lost novelty/priority | Prioritize the Phase 0.5 bootstrap gate to get one real-cluster-confirmed result fast; consider an early arXiv position paper (the notes.md gap analysis is close to submission-ready) to establish priority while the full v1 suite is built; keep v1 scope to 3 domains rather than 5 to reduce time-to-first-result |
+| Solo/small team underestimates full-scope (5-domain, 7-defense, multi-model) engineering effort relative to team-built benchmarks like AgentDojo/ASB | Missed timeline, incomplete artifact at submission | Hold to the v1 scope in §1.4 (3 domains, 4 defenses, 2 models, 1 primary agent); treat D3, D5, and the extension defenses as explicitly out of scope for v1 rather than aspirational stretch goals that quietly consume the schedule |
 
 ---
 
@@ -1089,7 +1122,7 @@ Show staging, read, and exposure events.
 - [ ] Synthetic fixtures
 - [ ] Portable environment image
 - [ ] Real-Slurm profile
-- [ ] Two or more agent adapters
+- [ ] One primary agent adapter (second adapter is a stretch goal, not required for v1)
 - [ ] Baseline defenses
 - [ ] Deterministic monitors/oracles
 - [ ] Scoring implementation
@@ -1129,13 +1162,17 @@ Show staging, read, and exposure events.
 
 ## 18. Immediate Next Actions
 
+This is the concrete checklist for Phase 0 and the Phase 0.5 bootstrap gate (§13) — the sequence that produces the earliest possible evidence for or against the paper's central thesis.
+
 1. Freeze the benchmark name and title.
 2. Write `benchmark_spec.md` with the task-policy and scoring definitions.
-3. Implement one end-to-end Slurm-debugging task.
+3. Implement one end-to-end Slurm-debugging task (D1).
 4. Add one poisoned-log case with a synthetic cross-project secret.
-5. Implement filesystem, scheduler, and mock-egress monitors.
+5. Implement just enough of the filesystem, scheduler, and mock-egress monitors to score this one case — not the full monitor suite yet.
 6. Validate benign and scripted-malicious reference policies.
-7. Add the first real agent adapter.
-8. Run a 3-seed pilot with baseline and prompt-only defense.
-9. Review whether the result demonstrates an HPC-specific boundary rather than generic prompt injection.
-10. Use the pilot to refine the full case-development process.
+7. Have a second reviewer independently label the permitted/prohibited boundary for this case (start of §12.3's dual-review process).
+8. Reproduce the same attack case on the authorized real-Slurm testbed (§WP3) — this is the Phase 0.5 exit gate, not a later confirmation step.
+9. Add the first real agent adapter.
+10. Run a 3-seed pilot with the unprotected (B0) and prompt-only (B1) defenses.
+11. Review whether the result demonstrates an HPC-specific boundary (depends on scheduler, project-scope, or shared-filesystem semantics) rather than generic prompt injection. If it doesn't, revisit the task/attack design before scaling up.
+12. Use the pilot to refine the full case-development process, then proceed to Phase 1's broader infrastructure build.

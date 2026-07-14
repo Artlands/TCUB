@@ -1,0 +1,42 @@
+\section{Threat Model: The Hijacked Authorized Agent}
+\label{sec:threat-model}
+
+\subsection{Definition}
+\label{sec:threat-def}
+
+An agent is \textbf{hijacked} when adversarial content encountered during normal operation --- a file it read, a log it inspected, a tool's output, a message from a peer agent --- causes it to perform an action that violates the scope of its assigned task, while every individual action it takes remains within what the user's account and the agent's granted tool access technically permit. The agent does not escalate privilege in the conventional sense: it does not need root, does not need to bypass POSIX permissions, and does not need to steal a credential. It needs only to be redirected while remaining, at every step, ``authorized.''
+
+This is what separates the threat from ordinary indirect prompt injection as usually presented: in HPC, the account performing the hijacked action frequently has \emph{broader} standing authority than the task requires --- for example, legitimate membership in several projects --- so a hijacked action can look, to a system-level audit log, identical to an unusual-but-permitted request from a trusted user. The security-relevant boundary is not the account's authority; it is the \emph{task's} authority, and no conventional HPC control currently represents that boundary as a first-class, checkable object.
+
+\subsection{Assumptions}
+\label{sec:threat-assumptions}
+
+\begin{itemize}[leftmargin=*]
+  \item the user intentionally and legitimately launches the agent for a specific task;
+  \item the agent has valid, correctly provisioned access to its assigned workspace and tools;
+  \item the cluster control plane, scheduler, and any benchmark or monitoring harness are trusted;
+  \item the attacker does not have root access and does not modify model weights;
+  \item the attacker's only foothold is the ability to influence content the agent will read, execute, or receive during normal operation --- a file, a log, a tool's output, shared state, or a message from another agent.
+\end{itemize}
+
+\subsection{Attacker capability classes}
+\label{sec:threat-capabilities}
+
+Table~\ref{tab:capabilities} enumerates the minimal attacker footholds this threat model considers. A rigorous case for this threat model requires that each capability class be minimal and explicit --- an attack that silently assumes a stronger foothold than it declares is not evidence for the ``authorized agent'' framing, it is evidence for a conventional access-control failure, and the two should not be conflated.
+
+\begin{table}[H]
+\centering
+\caption{Attacker capability classes considered by the hijacked authorized agent threat model.}
+\label{tab:capabilities}
+\begin{tabularx}{\linewidth}{@{} l X X @{}}
+\toprule
+\textbf{Class} & \textbf{Capability} & \textbf{Representative HPC source} \\
+\midrule
+C1 & Write or influence a scientific artifact the agent will read & simulation log, metadata field, README, result file \\
+C2 & Influence scheduler-adjacent output & job stdout/stderr, wrapper diagnostics, accounting note \\
+C3 & Control a tool's description or output & build helper, converter, module description, MCP tool server \\
+C4 & Write to shared node or filesystem state & scratch space, cache, shared collaboration path \\
+C5 & Control or hijack a peer agent & inter-agent message, staged intermediate artifact \\
+\bottomrule
+\end{tabularx}
+\end{table}
