@@ -1,22 +1,22 @@
-\section{Why Existing Controls Are Insufficient}
+\section{Limits of Existing Controls}
 \label{sec:defense-gap}
 
-Table~\ref{tab:defense-gap} maps established HPC and agent-monitoring controls against what they verify and what they miss for a hijacked authorized agent. The pattern across every row is the same: existing HPC controls are built to answer ``was this action within the account's authority,'' and they answer it correctly. They are not built to answer ``was this action within the \emph{task's} authority,'' which is the question the hijacked authorized agent threat model raises, and none of the standard audit surfaces --- accounting logs, POSIX ACLs, network allowlists --- carry the information needed to answer it after the fact unless the agent framework itself records task-scoped provenance as a first-class signal.
+Table~\ref{tab:defense-gap} compares established HPC and agent-monitoring controls with the information needed to recognize a hijacked agent. These controls still reduce risk; the issue is that they operate at a different boundary. Authentication, permissions, quotas, and isolation describe what an account may do. They do not record what a particular delegated task was meant to do. Accounting logs, ACLs, and network allowlists therefore cannot reconstruct task intent after an incident unless the agent or its runtime records that intent and links it to subsequent actions.
 
 \begin{table}[H]
 \centering
-\caption{Existing HPC and agent-monitoring controls versus what they miss for hijacked authorized agents.}
+\caption{Information captured by existing controls and information needed to recognize a hijacked agent.}
 \label{tab:defense-gap}
 \begin{tabularx}{\linewidth}{@{} X X X @{}}
 \toprule
 \textbf{Existing control} & \textbf{What it verifies} & \textbf{What it misses for hijacked agents} \\
 \midrule
-Authentication / SSO / zero-trust identity \cite{Alam2024ZeroTrust} & Who is the user & Whether the \emph{intent} behind an authenticated action was the user's or was injected \\
-POSIX permissions, zone-based access architecture \cite{NIST2024SP800223} & Which files/zones the account may reach & Whether the \emph{task} should reach them, when the account legitimately can \\
-Scheduler accounting and quotas & How much was consumed and by whom & Whether the consumption was requested by the user or induced by poisoned content \\
-Enforced user/process/network separation \cite{Prout2024UserSeparation} & Isolation between different users' work & Redirection \emph{within} one user's own authorized session \\
-Filesystem/network auditing, DLP & What left, over which channel & Egress through a channel the agent is authorized to use, e.g.\ a normal LLM API call \\
-Per-agent action logging & What the agent did & \emph{Why} --- whether an action traces to legitimate task intent or to adversarial content the agent consumed \\
+Authentication / SSO / zero-trust identity \cite{Alam2024ZeroTrust} & The identity and attributes of the user & Whether an authenticated action originated in the user's request or in injected content \\
+POSIX permissions, zone-based access architecture \cite{NIST2024SP800223} & Resources the account may access & Whether those resources belong to the current task \\
+Scheduler accounting and quotas & Resource use attributed to an account & Whether that use was requested or induced by poisoned content \\
+Enforced user/process/network separation \cite{Prout2024UserSeparation} & Isolation between users & Redirection within one user's authorized session \\
+Filesystem/network auditing, DLP & Data movement over observed channels & Disclosure through an approved channel, such as a normal LLM API request \\
+Per-agent action logging & The actions selected by the agent & Whether an action follows task intent or adversarial context \\
 \bottomrule
 \end{tabularx}
 \end{table}

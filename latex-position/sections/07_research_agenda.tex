@@ -4,31 +4,31 @@
 \subsection{Security requirements for HPC-agent platforms}
 \label{sec:requirements}
 
-The gap analysis in Section~\ref{sec:defense-gap} motivates a concrete list of properties an HPC-agent platform would need in order to make hijacked-agent incidents detectable or preventable, rather than indistinguishable from legitimate broad-account activity:
+The comparison in Section~\ref{sec:defense-gap} suggests several capabilities for an HPC-agent platform. Some belong in the agent runtime and others may require support from the scheduler, storage system, or site network. Their feasibility will vary across facilities, but together they define a useful design target:
 
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Task-scoped authority}, enforced independently of the account's standing access --- the platform must be able to represent and check ``permitted for this task'' as distinct from ``permitted for this account.''
-  \item \textbf{Provenance-aware context handling} --- every piece of content entering an agent's context (user instruction, file content, tool output, peer-agent message) should carry a trust/source label the agent's decision process can condition on.
-  \item \textbf{Egress control} for agent-to-model traffic, since data can leave through a channel --- an LLM API call --- that is authorized and encrypted by default and therefore invisible to conventional network monitoring aimed at exfiltration.
-  \item \textbf{Shared-filesystem hygiene}, given that scratch and collaboration storage persists adversarial content across jobs, users, and agents in a way session-scoped web contexts do not.
-  \item \textbf{Tool and module trust}, extending existing software-supply-chain practice to cover tool \emph{descriptions} and MCP manifests, not just binaries.
-  \item \textbf{Scheduler-aware containment}, so that a hijacked agent cannot translate a context-level compromise into unbounded resource consumption against the user's allocation.
-  \item \textbf{Cross-agent correlation}, so that staged, multi-hop exfiltration across cooperating agents is visible as a single event rather than several individually unremarkable ones.
+  \item \textbf{Task-scoped authority.} The runtime should distinguish resources needed for the current task from resources available to the user's account as a whole.
+  \item \textbf{Context provenance.} User instructions, file content, tool output, and peer-agent messages should retain source and trust metadata when they enter the agent's context.
+  \item \textbf{Egress control.} Agent-to-model traffic needs policy enforcement because an approved, encrypted LLM API request can also carry protected data.
+  \item \textbf{Shared-filesystem hygiene.} Sites need ways to limit or label stale and cross-user content in scratch, cache, and collaboration paths used by agents.
+  \item \textbf{Tool and module trust.} Software-supply-chain checks should cover tool descriptions and MCP manifests as well as executable code.
+  \item \textbf{Scheduler-aware containment.} Limits should prevent a redirected agent from turning a context compromise into excessive spending of the user's allocation.
+  \item \textbf{Cross-agent correlation.} Monitoring should connect related actions across agents so that a staged disclosure does not appear as several unrelated events.
 \end{itemize}
 
 \subsection{Toward a benchmark: HPC-AgentSec}
 \label{sec:benchmark}
 
-A threat model and a taxonomy motivate but do not by themselves measure anything. The natural next step --- already underway as a companion effort --- is an empirical benchmark that operationalizes Sections~\ref{sec:threat-model} and~\ref{sec:taxonomy} into realistic tasks, task-scoped policies, injected attack cases, deterministic security oracles, and joint utility/security metrics, following the general methodology established by AgentDojo \cite{Debenedetti2024AgentDojo} but built around HPC-native semantics: Slurm-mediated scheduler actions, project-scoped filesystem policy, and scientific-integrity oracles that check for silent parameter, filter, or provenance tampering rather than only data exposure. That effort (working name \textbf{HPC-AgentSec}; see the companion benchmark paper draft and development plan in the same project repository) is scoped to answer, empirically, the questions this position paper raises analytically: how often current agents follow adversarial HPC context, which infrastructure surfaces are highest-risk, and which existing or proposed controls actually reduce risk without destroying utility.
+The claims above need empirical support. We are developing a companion benchmark, provisionally named \textbf{HPC-AgentSec}, to translate the threat model into executable tasks and attacks. The design follows AgentDojo's practice of measuring task utility together with attack success \cite{Debenedetti2024AgentDojo}, but replaces web and office applications with HPC-specific resources. Planned scenarios include Slurm actions, project-scoped filesystem policies, and checks for silent changes to scientific parameters, filters, or provenance. Each scenario pairs a user task with an explicit task policy and a deterministic security oracle. This should make it possible to compare agents and defenses on three practical questions: whether the agent completes the assigned work, whether adversarial context redirects it, and whether a defense improves security without making the workflow unusable.
 
 \subsection{Open questions}
 \label{sec:open-questions}
 
-Beyond the benchmark itself, several questions remain open and are, in our view, worth independent study:
+The benchmark will address only part of the larger problem. Several design questions also deserve study:
 
 \begin{itemize}[leftmargin=*]
-  \item How should ``task scope'' be authored and validated when it is inherently somewhat subjective, and how much does that subjectivity affect the reliability of security measurements built on it?
-  \item Do defenses that work well in web/enterprise agent settings (structured provenance labels, tool allowlists) transfer to HPC's scheduler and filesystem semantics, or do they need HPC-specific redesign?
-  \item What is the right locus of enforcement --- the agent framework, the scheduler, the filesystem, or a dedicated runtime monitor --- for task-scoped policy, given that HPC sites differ widely in what they can modify?
-  \item As multi-agent scientific workflows become more common, how should cross-agent trust be represented so that staged exfiltration is detectable without requiring every agent to fully trust every other agent's output?
+  \item How should users specify task scope when legitimate scientific work is exploratory, and how sensitive are security results to that specification?
+  \item Do provenance labels and tool allowlists developed for web or enterprise agents transfer to scheduler and filesystem operations?
+  \item Should task policy be enforced by the agent framework, scheduler, filesystem, or a separate monitor, especially at sites that cannot modify all four?
+  \item How can a multi-agent workflow preserve useful delegation while preventing one agent from silently extending another agent's authority?
 \end{itemize}

@@ -4,9 +4,9 @@
 \subsection{Definition}
 \label{sec:threat-def}
 
-An agent is \textbf{hijacked} when adversarial content encountered during normal operation --- a file it read, a log it inspected, a tool's output, a message from a peer agent --- causes it to perform an action that violates the scope of its assigned task, while every individual action it takes remains within what the user's account and the agent's granted tool access technically permit. The agent does not escalate privilege in the conventional sense: it does not need root, does not need to bypass POSIX permissions, and does not need to steal a credential. It needs only to be redirected while remaining, at every step, ``authorized.''
+We call an agent \textbf{hijacked} when content encountered during ordinary operation causes it to act outside its assigned task, even though the user's account and the agent's tool configuration permit each individual action. The content might appear in a file, a job log, tool output, or a message from another agent. No conventional privilege escalation is required: the attacker need not obtain root access, bypass POSIX permissions, or steal credentials.
 
-This is what separates the threat from ordinary indirect prompt injection as usually presented: in HPC, the account performing the hijacked action frequently has \emph{broader} standing authority than the task requires --- for example, legitimate membership in several projects --- so a hijacked action can look, to a system-level audit log, identical to an unusual-but-permitted request from a trusted user. The security-relevant boundary is not the account's authority; it is the \emph{task's} authority, and no conventional HPC control currently represents that boundary as a first-class, checkable object.
+Consider an agent asked to diagnose a failed job in project A. The user may also belong to project B and may be allowed to submit jobs to several partitions. If a poisoned log leads the agent to read project B or launch an unrelated job, the operating system and scheduler may record nothing more than permitted activity by that user. The violated boundary is the authority implied by the debugging task, not the standing authority of the account. Conventional HPC controls do not usually encode that task boundary in a form they can enforce or audit.
 
 \subsection{Assumptions}
 \label{sec:threat-assumptions}
@@ -16,13 +16,13 @@ This is what separates the threat from ordinary indirect prompt injection as usu
   \item the agent has valid, correctly provisioned access to its assigned workspace and tools;
   \item the cluster control plane, scheduler, and any benchmark or monitoring harness are trusted;
   \item the attacker does not have root access and does not modify model weights;
-  \item the attacker's only foothold is the ability to influence content the agent will read, execute, or receive during normal operation --- a file, a log, a tool's output, shared state, or a message from another agent.
+  \item the attacker's only foothold is the ability to influence content the agent will read, execute, or receive during normal operation, such as a file, a log, a tool's output, shared state, or a message from another agent.
 \end{itemize}
 
 \subsection{Attacker capability classes}
 \label{sec:threat-capabilities}
 
-Table~\ref{tab:capabilities} enumerates the minimal attacker footholds this threat model considers. A rigorous case for this threat model requires that each capability class be minimal and explicit --- an attack that silently assumes a stronger foothold than it declares is not evidence for the ``authorized agent'' framing, it is evidence for a conventional access-control failure, and the two should not be conflated.
+Table~\ref{tab:capabilities} lists the attacker footholds considered here. Stating the foothold matters because an attack that already assumes unauthorized filesystem or administrator access demonstrates a conventional access-control failure, not the failure mode defined above.
 
 \begin{table}[H]
 \centering
