@@ -1,4 +1,4 @@
-# HPC-AgentSec Development Plan
+# TaskBound Development Plan
 
 > **Purpose:** build a reproducible benchmark for evaluating the utility and security of LLM agents in HPC environments.  
 > **Primary output:** an open benchmark artifact and an empirical paper, not a production defense platform.  
@@ -8,7 +8,7 @@
 
 ### 1.1 Benchmark question
 
-HPC-AgentSec evaluates:
+TaskBound evaluates:
 
 > Can an LLM agent complete a realistic HPC task while remaining within a task-scoped data, tool, scheduler, and scientific-integrity boundary when its environment contains adversarial content?
 
@@ -177,7 +177,7 @@ Run the benchmark, compute metrics, and generate paper-ready artifacts.
 ## 3. Repository Architecture
 
 ```text
-hpc-agentsec/
+taskbound/
   README.md
   LICENSE
   CITATION.cff

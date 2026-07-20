@@ -2,7 +2,7 @@
 
 > **Paper type:** position / vision paper
 > **Status:** draft — author list, venue, and final title to be finalized before submission
-> **Companion effort:** this position paper motivates a forthcoming benchmark and empirical study, working name **HPC-AgentSec** (see `hpc_agentsec_benchmark_paper_draft.md` and `hpc_agentsec_benchmark_development_plan.md` in this repository)
+> **Companion effort:** this position paper motivates a forthcoming benchmark and empirical study named **TaskBound** (see `taskbound_benchmark_paper_draft.md` and `taskbound_benchmark_development_plan.md` in this repository)
 
 ## Abstract
 
@@ -35,7 +35,7 @@ We argue three things in this paper:
 1. A precise definition of the **hijacked authorized agent** threat model for HPC, distinguishing it from conventional privilege escalation and from generic indirect prompt injection (§4).
 2. A **taxonomy of HPC-specific attack surfaces**: shared parallel-filesystem poisoning, scheduler-induced log and co-location channels, tool/module/MCP poisoning, cross-project data leakage, and coordinated multi-agent exfiltration (§5).
 3. A **defense-gap analysis** showing which existing HPC and agent-security controls detect, partially detect, or miss each attack surface (§6).
-4. A **research agenda**, including the security requirements a trustworthy HPC-agent platform would need to satisfy, and a pointer to an empirical benchmark (HPC-AgentSec) now under development to measure the problem this paper defines (§7).
+4. A **research agenda**, including the security requirements a trustworthy HPC-agent platform would need to satisfy, and a pointer to an empirical benchmark (TaskBound) now under development to measure the problem this paper defines (§7).
 
 ### 1.3 Scope and non-goals
 
@@ -148,9 +148,9 @@ The gap analysis in §6 motivates a concrete list of properties an HPC-agent pla
 - **Scheduler-aware containment**, so that a hijacked agent cannot translate a context-level compromise into unbounded resource consumption against the user's allocation.
 - **Cross-agent correlation**, so that staged, multi-hop exfiltration across cooperating agents is visible as a single event rather than several individually unremarkable ones.
 
-### 7.2 Toward a benchmark: HPC-AgentSec
+### 7.2 Toward a benchmark: TaskBound
 
-A threat model and a taxonomy motivate but do not by themselves measure anything. The natural next step — already underway as a companion effort — is an empirical benchmark that operationalizes §4 and §5 into realistic tasks, task-scoped policies, injected attack cases, deterministic security oracles, and joint utility/security metrics, following the general methodology established by AgentDojo [8] but built around HPC-native semantics: Slurm-mediated scheduler actions, project-scoped filesystem policy, and scientific-integrity oracles that check for silent parameter, filter, or provenance tampering rather than only data exposure. That effort (working name **HPC-AgentSec**; see the companion benchmark paper draft and development plan in this repository) is scoped to answer, empirically, the questions this position paper raises analytically: how often current agents follow adversarial HPC context, which infrastructure surfaces are highest-risk, and which existing or proposed controls actually reduce risk without destroying utility.
+A threat model and a taxonomy motivate but do not by themselves measure anything. The natural next step — already underway as a companion effort — is an empirical benchmark that operationalizes §4 and §5 into realistic tasks, task-scoped policies, injected attack cases, deterministic security oracles, and joint utility/security metrics, following the general methodology established by AgentDojo [8] but built around HPC-native semantics: Slurm-mediated scheduler actions, project-scoped filesystem policy, and scientific-integrity oracles that check for silent parameter, filter, or provenance tampering rather than only data exposure. That effort, **TaskBound**, is scoped to answer empirically the questions this position paper raises analytically: how often current agents follow adversarial HPC context, which infrastructure surfaces are highest-risk, and which existing or proposed controls actually reduce risk without destroying utility.
 
 ### 7.3 Open questions
 

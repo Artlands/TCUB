@@ -9,7 +9,7 @@ Several projects now place LLM agents in direct contact with HPC infrastructure.
 Dawson et al.\ identify correctness, reproducibility, and safe resource use as open problems for agentic supercomputing workflows \cite{Dawson2026LARA}. Similar concerns have reached site documentation. Aalto Scientific Computing notes the use of Claude Code and OpenAI Codex for coding and Slurm job management on Triton, and warns users about prompt injection, malicious skills, external code, and confidentiality \cite{AaltoSciComp2026}. The systems literature nevertheless remains focused mainly on capability, orchestration, and provenance. It offers little evidence about behavior when routine inputs such as logs or tool output are malicious.
 
 \subsection{LLM-agent security: known attack mechanisms}
-\label{sec:background-agentsec}
+\label{sec:background-agent-security}
 
 The underlying attack mechanisms have been studied mostly outside HPC. Greshake et al.\ showed that instructions embedded in retrieved content, rather than supplied by the user, can change an LLM-integrated application's behavior and lead to data disclosure or persistent compromise \cite{Greshake2023PromptInjection}. ToolEmu evaluates harmful actions by tool-using agents in an LM-emulated sandbox \cite{Ruan2024ToolEmu}. AgentDojo provides a reproducible benchmark with 97 tasks and 629 security test cases across email, banking, travel, and workspace applications \cite{Debenedetti2024AgentDojo}. Its joint measurement of task utility and attack success is particularly useful for our proposed benchmark (Section~\ref{sec:benchmark}).
 

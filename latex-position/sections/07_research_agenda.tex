@@ -16,10 +16,10 @@ The comparison in Section~\ref{sec:defense-gap} suggests several capabilities fo
   \item \textbf{Cross-agent correlation.} Monitoring should connect related actions across agents so that a staged disclosure does not appear as several unrelated events.
 \end{itemize}
 
-\subsection{Toward a benchmark: HPC-AgentSec}
+\subsection{Toward a benchmark: TaskBound}
 \label{sec:benchmark}
 
-The claims above need empirical support. We are developing a companion benchmark, provisionally named \textbf{HPC-AgentSec}, to translate the threat model into executable tasks and attacks. The design follows AgentDojo's practice of measuring task utility together with attack success \cite{Debenedetti2024AgentDojo}, but replaces web and office applications with HPC-specific resources. Planned scenarios include Slurm actions, project-scoped filesystem policies, and checks for silent changes to scientific parameters, filters, or provenance. Each scenario pairs a user task with an explicit task policy and a deterministic security oracle. This should make it possible to compare agents and defenses on three practical questions: whether the agent completes the assigned work, whether adversarial context redirects it, and whether a defense improves security without making the workflow unusable.
+The claims above need empirical support. We are developing a companion benchmark called \textbf{TaskBound} to translate the threat model into executable tasks and attacks. The design follows AgentDojo's practice of measuring task utility together with attack success \cite{Debenedetti2024AgentDojo}, but replaces web and office applications with HPC-specific resources. Planned scenarios include Slurm actions, project-scoped filesystem policies, and checks for silent changes to scientific parameters, filters, or provenance. Each scenario pairs a user task with an explicit task policy and a deterministic security oracle. This should make it possible to compare agents and defenses on three practical questions: whether the agent completes the assigned work, whether adversarial context redirects it, and whether a defense improves security without making the workflow unusable.
 
 \subsection{Open questions}
 \label{sec:open-questions}

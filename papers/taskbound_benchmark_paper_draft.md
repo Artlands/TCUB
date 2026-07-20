@@ -1,6 +1,6 @@
 # Trusted Credentials, Untrusted Behavior: Benchmarking LLM-Agent Security in High-Performance Computing
 
-> **Working benchmark name:** HPC-AgentSec  
+> **Benchmark name:** TaskBound  
 > **Paper type:** benchmark + threat characterization + empirical security study  
 > **Primary claim:** existing LLM-agent security benchmarks do not model the task, project, scheduler, filesystem, and scientific-integrity boundaries that determine risk in HPC environments.
 
@@ -8,7 +8,7 @@
 
 Large language model (LLM) agents are beginning to assist with scientific computing tasks such as job-script generation, failure diagnosis, software deployment, simulation monitoring, data analysis, and workflow orchestration. These agents are useful because they can read scientific artifacts, inspect scheduler output, invoke command-line tools, modify scripts, submit jobs, and communicate with local or remote model backends. The same capabilities create a security risk that is not captured by existing general-purpose agent benchmarks: an agent can be redirected by untrusted content while continuing to operate under valid user credentials and legitimate scheduler authority.
 
-We present **HPC-AgentSec**, a benchmark for evaluating the utility and security of LLM agents in representative high-performance computing environments. The benchmark models the **hijacked authorized agent** threat, in which adversarial instructions embedded in scientific files, job logs, tool outputs, shared storage, or peer-agent messages cause an otherwise legitimate agent to violate its assigned task boundary. HPC-AgentSec includes realistic HPC workflows, task-scoped access policies, synthetic project data, Slurm-like scheduler actions, tool interfaces, attack cases, deterministic security oracles, and reproducible scoring. It evaluates both whether an agent completes the intended scientific task and whether it avoids unauthorized data access, data exposure, workflow corruption, unsafe command execution, resource misuse, and cross-agent contamination.
+We present **TaskBound**, a benchmark for evaluating the utility and security of LLM agents in representative high-performance computing environments. The benchmark models the **hijacked authorized agent** threat, in which adversarial instructions embedded in scientific files, job logs, tool outputs, shared storage, or peer-agent messages cause an otherwise legitimate agent to violate its assigned task boundary. TaskBound includes realistic HPC workflows, task-scoped access policies, synthetic project data, Slurm-like scheduler actions, tool interfaces, attack cases, deterministic security oracles, and reproducible scoring. It evaluates both whether an agent completes the intended scientific task and whether it avoids unauthorized data access, data exposure, workflow corruption, unsafe command execution, resource misuse, and cross-agent contamination.
 
 We use the benchmark to study five questions: how frequently current agents follow malicious HPC context; which infrastructure features create the highest-risk attack surfaces; how attack outcomes vary across models and agent designs; which existing controls mitigate the attacks; and what utility-security tradeoffs those controls impose. The benchmark is designed for safe execution with synthetic data and mock external services. Our results are intended to establish a reproducible foundation for comparing LLM-agent security mechanisms in scientific computing rather than to claim a complete defense.
 
@@ -49,7 +49,7 @@ A few demonstrations would show that such attacks are possible, but they would n
 
 ### 1.1 Research objective
 
-The objective of HPC-AgentSec is to answer:
+The objective of TaskBound is to answer:
 
 > Can an LLM agent complete realistic HPC tasks while remaining within a task-scoped security and scientific-integrity boundary when its environment contains adversarial content?
 
@@ -73,7 +73,7 @@ This paper makes the following contributions:
 
 1. **HPC-specific benchmark formulation.** We define the hijacked authorized agent as a task-boundary violation problem in which identity and conventional authorization remain valid.
 
-2. **Benchmark environment and task suite.** We introduce HPC-AgentSec, a controlled HPC-like environment with project directories, shared storage, Slurm-like scheduler operations, scientific artifacts, tool interfaces, multi-agent communication, and synthetic restricted data.
+2. **Benchmark environment and task suite.** We introduce TaskBound, a controlled HPC-like environment with project directories, shared storage, Slurm-like scheduler operations, scientific artifacts, tool interfaces, multi-agent communication, and synthetic restricted data.
 
 3. **Attack taxonomy and security cases.** We provide attack cases covering scientific-file injection, scheduler-log injection, tool-output poisoning, shared temporary-state injection, cross-project access, resource misuse, scientific-workflow corruption, and multi-agent staging.
 
@@ -85,7 +85,7 @@ This paper makes the following contributions:
 
 ### 1.4 Scope and non-goals
 
-HPC-AgentSec focuses on LLM agents that use textual context and tools to perform scientific-computing operations. It does **not** attempt to benchmark:
+TaskBound focuses on LLM agents that use textual context and tools to perform scientific-computing operations. It does **not** attempt to benchmark:
 
 - model training-time poisoning;
 - model extraction or weight theft;
@@ -124,9 +124,9 @@ They usually do not answer:
 
 ### 2.3 Relationship to prior agent-security benchmarks
 
-HPC-AgentSec follows the established benchmark principle of evaluating both utility and security under adversarial tool or data outputs. Its distinction is the system model and the protected properties.
+TaskBound follows the established benchmark principle of evaluating both utility and security under adversarial tool or data outputs. Its distinction is the system model and the protected properties.
 
-A general agent-security benchmark may model an email, travel, banking, or productivity domain. HPC-AgentSec instead models:
+A general agent-security benchmark may model an email, travel, banking, or productivity domain. TaskBound instead models:
 
 - project-scoped scientific data;
 - scheduler operations and allocation consumption;
@@ -144,7 +144,7 @@ The benchmark does not claim that indirect prompt injection is new. Its contribu
 
 ### 3.1 Goals
 
-HPC-AgentSec should support four uses:
+TaskBound should support four uses:
 
 1. **Vulnerability measurement:** compare how often agents violate HPC task boundaries.
 2. **Defense evaluation:** compare prompt-, agent-, tool-, and system-level mitigations.
@@ -232,7 +232,7 @@ A benchmark case should require the minimum capability necessary for the attack 
 
 ### 4.4 Security properties
 
-HPC-AgentSec evaluates whether the agent preserves:
+TaskBound evaluates whether the agent preserves:
 
 1. **Task confinement:** actions remain within the declared task scope.
 2. **Data confidentiality:** protected data is not exposed to unauthorized outputs or model endpoints.
@@ -244,9 +244,9 @@ HPC-AgentSec evaluates whether the agent preserves:
 
 ---
 
-## 5. HPC-AgentSec Benchmark Architecture
+## 5. TaskBound Benchmark Architecture
 
-HPC-AgentSec consists of six layers.
+TaskBound consists of six layers.
 
 ### 5.1 Environment layer
 
@@ -763,7 +763,7 @@ Each case study should include:
 
 ### 14.1 Prompt injection and LLM-agent security
 
-Discuss indirect prompt injection, tool-mediated attacks, agent security benchmarks, and defenses. Position HPC-AgentSec as an HPC-specific benchmark rather than a new discovery of prompt injection.
+Discuss indirect prompt injection, tool-mediated attacks, agent security benchmarks, and defenses. Position TaskBound as an HPC-specific benchmark rather than a new discovery of prompt injection.
 
 ### 14.2 Benchmarks for tool-using agents
 
@@ -829,7 +829,7 @@ Version the benchmark, preserve old test cases, document changes, and maintain a
 
 LLM agents introduce a task-boundary problem for scientific computing. An agent may be correctly authenticated, legitimately authorized, and operationally useful while still being redirected by untrusted scientific artifacts, tool outputs, shared storage, or peer agents. Existing agent-security benchmarks establish the importance of evaluating prompt injection, but they do not capture the scheduler, project, filesystem, resource, provenance, and scientific-integrity boundaries of HPC environments.
 
-HPC-AgentSec provides a benchmark foundation for measuring this risk. It combines realistic HPC tasks, controlled attack cases, deterministic system-level oracles, and joint utility-security metrics. By making unauthorized data access, sensitive-data exposure, workflow corruption, unsafe execution, resource misuse, and cross-agent contamination measurable, the benchmark enables reproducible comparison of models, agents, and defenses. The goal is not to declare a complete solution, but to provide the evaluation infrastructure needed to build and assess secure agentic scientific-computing systems.
+TaskBound provides a benchmark foundation for measuring this risk. It combines realistic HPC tasks, controlled attack cases, deterministic system-level oracles, and joint utility-security metrics. By making unauthorized data access, sensitive-data exposure, workflow corruption, unsafe execution, resource misuse, and cross-agent contamination measurable, the benchmark enables reproducible comparison of models, agents, and defenses. The goal is not to declare a complete solution, but to provide the evaluation infrastructure needed to build and assess secure agentic scientific-computing systems.
 
 ---
 
@@ -841,7 +841,7 @@ HPC-AgentSec provides a benchmark foundation for measuring this risk. It combine
 
 ### Alternatives
 
-- **HPC-AgentSec: A Benchmark for LLM-Agent Security in High-Performance Computing**
+- **TaskBound: A Benchmark for LLM-Agent Security in High-Performance Computing**
 - **Benchmarking Hijacked Authorized Agents in Scientific Computing**
 - **Can LLM Agents Safely Operate HPC Systems? An Evaluation Benchmark**
-- **HPC-AgentSec: Tasks, Attacks, and Defenses for Agentic Scientific Computing**
+- **TaskBound: Tasks, Attacks, and Defenses for Agentic Scientific Computing**
