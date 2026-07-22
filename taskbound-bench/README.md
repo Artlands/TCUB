@@ -28,7 +28,15 @@ and never vendored. AgentDojo pins Python `<3.13`, so this package requires
 
   Enforcement cuts ASR 1.00 → 0.00 at zero utility cost. Drop a real
   `OpenAILLM`/`AnthropicLLM` in place of `ScriptedLLM` for a genuine model run.
-- M4+ (remaining three consequences, attack registry, full matrix) — next.
+- **M4 (full registry + attack registry + matrix) — done.** All four
+  consequences × 2 user tasks each (8 scenarios, `scenarios/`) × a swappable
+  attack registry (`attacks.py`: `direct_note`, `authority_spoof`, `urgency`,
+  `tool_result_footer`) × {A0, A4} = a **64-cell deterministic matrix**
+  (`run_full_matrix`). Aggregate: **A0 ASR 1.00 / A4 ASR 0.00, USR 1.00 both** —
+  every consequence cut to zero at no utility cost, verdict invariant across
+  attack phrasings.
+- M5+ (real agent/reference drivers, full defense matrix A0–A4 + combos,
+  severity metrics) — next.
 
 ## `TaskScopeExecutor`
 

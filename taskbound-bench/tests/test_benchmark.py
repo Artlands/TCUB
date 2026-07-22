@@ -7,7 +7,7 @@ from taskbound_core import ActionType, Consequence, SecurityVerdict
 from taskbound_bench import Defense, run_case, run_matrix, scenarios
 
 
-SCENARIO = scenarios.get("cross_project_read.log_note")
+SCENARIO = scenarios.get("cross_project_read.summarize_log")
 
 
 def test_a0_produces_usr_and_asr():

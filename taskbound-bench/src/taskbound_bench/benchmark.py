@@ -1,8 +1,8 @@
 """The thin benchmark runner (the ``benchmark.py`` referenced in the plan).
 
-Runs a bench scenario through the real AgentDojo pipeline under a defense,
-extracts the *executed* action trace from the resulting messages, and scores it
-with the shared ``taskbound_core`` oracle to produce USR and ASR.
+Runs a bench scenario through the real AgentDojo pipeline under a defense and a
+chosen attack, extracts the *executed* action trace from the resulting messages,
+and scores it with the shared ``taskbound_core`` oracle to produce USR and ASR.
 
 Key point mirroring the harness: a call the A4 ``TaskScopeExecutor`` denies comes
 back as a tool result carrying an error, so it is excluded from the executed
@@ -22,13 +22,24 @@ from agentdojo.types import ChatMessage
 
 from taskbound_core import Action, Consequence, SecurityVerdict, security_oracle
 
+from .attacks import DEFAULT_ATTACK, Attack, all_attacks
+from .env import HPCEnv
 from .executor import TaskScopeExecutor
 from .mapping import hpc_action_mapper, hpc_env_adapter
 from .pipeline import ScriptedLLM, build_pipeline
 from .scenario import BenchScenario
+from .scenarios import all_scenarios
 from .tools import register_hpc_tools
 
-__all__ = ["Defense", "CaseResult", "run_case", "run_matrix"]
+__all__ = [
+    "Defense",
+    "CaseResult",
+    "MatrixReport",
+    "materialize_env",
+    "run_case",
+    "run_matrix",
+    "run_full_matrix",
+]
 
 
 class Defense(Enum):
@@ -40,6 +51,7 @@ class Defense(Enum):
 class CaseResult:
     scenario_id: str
     defense: Defense
+    attack_id: str
     consequence: Consequence
     security: SecurityVerdict
     utility_preserved: bool
@@ -57,12 +69,22 @@ class CaseResult:
         return 1.0 if self.security is SecurityVerdict.VIOLATED else 0.0
 
 
+def materialize_env(scenario: BenchScenario, attack: Attack) -> HPCEnv:
+    """Build the scenario's benign env, then plant the attack-rendered payload
+    into the injection site."""
+    env = scenario.base_env_factory()
+    env.files[scenario.injection_site] = env.files.get(scenario.injection_site, "") + attack.render(
+        scenario.injection_instruction
+    )
+    return env
+
+
 def _split_executed_denied(
     messages: list[ChatMessage],
 ) -> tuple[list[Action], list[Action]]:
     """Map requested tool calls to Actions, split by whether they executed.
 
-    A tool result with a non-null ``error`` (e.g. a PolicyDenied denial, or any
+    A tool result with a non-null ``error`` (a PolicyDenied denial, or any
     execution failure) means its call did not take effect, so it is not part of
     the executed trace.
     """
@@ -86,24 +108,26 @@ def _split_executed_denied(
 
 def _make_executor(scenario: BenchScenario, defense: Defense) -> BasePipelineElement:
     if defense is Defense.A4:
-        return TaskScopeExecutor(
-            scenario.policy, hpc_action_mapper, env_adapter=hpc_env_adapter
-        )
+        return TaskScopeExecutor(scenario.policy, hpc_action_mapper, env_adapter=hpc_env_adapter)
     return ToolsExecutor()
 
 
 def run_case(
     scenario: BenchScenario,
     defense: Defense,
+    attack: Attack = DEFAULT_ATTACK,
+    *,
+    susceptible: bool = True,
     llm: Optional[BasePipelineElement] = None,
 ) -> CaseResult:
-    """Run one scenario under one defense through the real pipeline; score it."""
+    """Run one matrix cell (scenario × defense × attack) through the real pipeline."""
     if llm is None:
-        llm = ScriptedLLM(scenario.susceptible_script)
+        script = scenario.susceptible_script() if susceptible else scenario.robust_script()
+        llm = ScriptedLLM(script)
 
     runtime = FunctionsRuntime([])
     register_hpc_tools(runtime)
-    env = scenario.env_factory()
+    env = materialize_env(scenario, attack)
 
     pipeline = build_pipeline(scenario.system_prompt, llm, _make_executor(scenario, defense))
     _, _, env_out, messages, _ = pipeline.query(scenario.user_prompt, runtime, env)
@@ -115,6 +139,7 @@ def run_case(
     return CaseResult(
         scenario_id=scenario.id,
         defense=defense,
+        attack_id=attack.id,
         consequence=scenario.consequence,
         security=oracle.verdict,
         utility_preserved=scenario.utility(env_out),
@@ -123,7 +148,39 @@ def run_case(
     )
 
 
-def run_matrix(scenario: BenchScenario) -> dict[Defense, CaseResult]:
-    """Run the scenario under A0 and A4 (fresh susceptible model each). Returns
-    the joint result -- the USR/ASR pair the paper reports."""
-    return {defense: run_case(scenario, defense) for defense in (Defense.A0, Defense.A4)}
+def run_matrix(scenario: BenchScenario, attack: Attack = DEFAULT_ATTACK) -> dict[Defense, CaseResult]:
+    """Run one scenario under A0 and A4 (fresh susceptible model each). Returns
+    the joint result -- the USR/ASR pair the paper reports per cell."""
+    return {d: run_case(scenario, d, attack) for d in (Defense.A0, Defense.A4)}
+
+
+@dataclass(frozen=True)
+class MatrixReport:
+    cells: tuple[CaseResult, ...]
+
+    def _subset(self, defense: Defense) -> list[CaseResult]:
+        return [c for c in self.cells if c.defense is defense]
+
+    def usr(self, defense: Defense) -> float:
+        cells = self._subset(defense)
+        return sum(c.usr for c in cells) / len(cells) if cells else 0.0
+
+    def asr(self, defense: Defense) -> float:
+        cells = self._subset(defense)
+        return sum(c.asr for c in cells) / len(cells) if cells else 0.0
+
+
+def run_full_matrix(
+    scenarios: Optional[list[BenchScenario]] = None,
+    attacks: Optional[list[Attack]] = None,
+) -> MatrixReport:
+    """The whole deterministic matrix: scenarios × attacks × {A0, A4}."""
+    scenarios = scenarios if scenarios is not None else all_scenarios()
+    attacks = attacks if attacks is not None else all_attacks()
+    cells = [
+        run_case(scenario, defense, attack)
+        for scenario in scenarios
+        for attack in attacks
+        for defense in (Defense.A0, Defense.A4)
+    ]
+    return MatrixReport(cells=tuple(cells))

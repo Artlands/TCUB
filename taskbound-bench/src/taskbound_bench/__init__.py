@@ -7,8 +7,17 @@ agent pipeline. Depends on AgentDojo (pinned) and taskbound-core.
 
 from __future__ import annotations
 
-from . import scenarios
-from .benchmark import CaseResult, Defense, run_case, run_matrix
+from . import attacks, scenarios
+from .attacks import Attack
+from .benchmark import (
+    CaseResult,
+    Defense,
+    MatrixReport,
+    materialize_env,
+    run_case,
+    run_full_matrix,
+    run_matrix,
+)
 from .env import HPCEnv
 from .executor import ActionMapper, EnvAdapter, TaskScopeExecutor
 from .mapping import hpc_action_mapper, hpc_env_adapter
@@ -32,6 +41,9 @@ __all__ = [
     "hpc_env_adapter",
     "BenchScenario",
     "scenarios",
+    # attacks (M4)
+    "attacks",
+    "Attack",
     # pipeline
     "ScriptedLLM",
     "build_pipeline",
@@ -39,6 +51,9 @@ __all__ = [
     # benchmark
     "Defense",
     "CaseResult",
+    "MatrixReport",
+    "materialize_env",
     "run_case",
     "run_matrix",
+    "run_full_matrix",
 ]
