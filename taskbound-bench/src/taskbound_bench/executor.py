@@ -1,15 +1,16 @@
-"""``TaskScopeExecutor`` -- the A4 task-scope-enforcement defense.
+"""Gating pipeline elements: enforcing defenses that wrap AgentDojo's
+``ToolsExecutor`` by composition (no fork).
 
-This is the integration the whole benchmark hinges on (development-plan §3.2,
-§5.2, §6): a pipeline element that enforces ``taskbound_core.PolicyEngine`` at
-runtime by **wrapping** AgentDojo's ``ToolsExecutor`` *by composition* rather
-than forking it. It gates the tool calls the agent requested against the
-``TaskPolicy``, delegates the allowed subset to the inner ``ToolsExecutor`` for
-execution, and synthesizes tool-result messages denying the rest.
+``GatingExecutor`` is the shared machinery (development-plan §3.2, §5.2): for each
+requested tool call it asks a ``_judge`` whether to allow it, delegates the
+allowed subset to an inner executor for real execution, and synthesizes denial
+tool-results for the rest -- in original order, with the assistant history
+preserved. Because gates nest (each wraps an inner executor), the defense matrix
+(A2 allowlist, A3 egress gate, A4 task-scope) composes by stacking.
 
-Because the same ``taskbound_core.evaluate`` powers both this defense and the
-offline scoring oracle, "what the defense blocks" and "what the oracle counts as
-a violation" cannot drift apart.
+``TaskScopeExecutor`` (A4) enforces ``taskbound_core.evaluate`` -- the *same*
+function the offline oracle replays -- so "what the defense blocks" and "what the
+oracle counts as a violation" cannot drift apart.
 """
 
 from __future__ import annotations
@@ -26,69 +27,45 @@ from agentdojo.types import (
     text_content_block_from_string,
 )
 
-from taskbound_core import (
-    Action,
-    Decision,
-    EnvironmentState,
-    TaskPolicy,
-    evaluate,
-)
+from taskbound_core import Action, EnvironmentState, TaskPolicy, evaluate
 
-__all__ = ["ActionMapper", "EnvAdapter", "TaskScopeExecutor"]
+__all__ = [
+    "ActionMapper",
+    "EnvAdapter",
+    "GatingExecutor",
+    "TaskScopeExecutor",
+    "ToolAllowlistExecutor",
+    "EgressGateExecutor",
+]
 
 
 class ActionMapper(Protocol):
-    """Maps one requested tool call to a ``taskbound_core.Action`` to be judged.
-
-    Return ``None`` for a tool call that is not policy-governed (always allowed
-    through). In the full bench this is attached per tool; a plain callable or
-    dict-backed mapper is enough for a suite.
-    """
-
     def __call__(self, tool_call: FunctionCall) -> Optional[Action]: ...
 
 
-# Derives the taskbound-core view of the world (path->project, canaries, shared
-# paths) from AgentDojo's live environment, so the pure engine can judge actions.
 EnvAdapter = Callable[[Env], EnvironmentState]
 
 
-class TaskScopeExecutor(BasePipelineElement):
-    """Wraps a ``ToolsExecutor`` and denies out-of-scope tool calls.
+class GatingExecutor(BasePipelineElement):
+    """Base gate: judge each requested tool call, execute the allowed subset via
+    an inner executor, deny the rest. Subclasses implement ``_judge``."""
 
-    Args:
-        policy: the declared scope of the current task.
-        mapper: turns a requested ``FunctionCall`` into an ``Action`` to judge
-            (or ``None`` to pass it through ungoverned).
-        inner: the ``ToolsExecutor`` that actually runs allowed calls. A default
-            one is created if not supplied.
-        env_adapter: derives an ``EnvironmentState`` from the live AgentDojo env.
-    """
+    name = "gating_executor"
 
-    name = "task_scope_executor"
-
-    def __init__(
-        self,
-        policy: TaskPolicy,
-        mapper: ActionMapper,
-        inner: Optional[ToolsExecutor] = None,
-        env_adapter: Optional[EnvAdapter] = None,
-    ) -> None:
-        self.policy = policy
-        self.mapper = mapper
+    def __init__(self, inner: Optional[BasePipelineElement] = None) -> None:
         self.inner = inner if inner is not None else ToolsExecutor()
-        self.env_adapter = env_adapter
 
-    def _denial_message(self, tool_call: FunctionCall, decision: Decision) -> ChatToolResultMessage:
+    def _judge(self, tool_call: FunctionCall, env: Env) -> Optional[str]:
+        """Return ``None`` to allow, or an error string to deny the call."""
+        raise NotImplementedError
+
+    def _denial_message(self, tool_call: FunctionCall, reason: str) -> ChatToolResultMessage:
         return ChatToolResultMessage(
             role="tool",
             content=[text_content_block_from_string("")],
             tool_call_id=tool_call.id,
             tool_call=tool_call,
-            error=(
-                f"PolicyDenied: action outside the scope of task "
-                f"'{self.policy.task_id}'. {decision.reason}"
-            ),
+            error=reason,
         )
 
     def query(
@@ -99,57 +76,110 @@ class TaskScopeExecutor(BasePipelineElement):
         messages: Sequence[ChatMessage] = [],
         extra_args: dict = {},
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
-        # Only gate when the last message actually requests tool calls; otherwise
-        # behave exactly like the inner executor (same early-out contract).
         if len(messages) == 0 or messages[-1]["role"] != "assistant":
             return self.inner.query(query, runtime, env, messages, extra_args)
         tool_calls = messages[-1].get("tool_calls")
         if not tool_calls:
             return self.inner.query(query, runtime, env, messages, extra_args)
 
-        tb_env = self.env_adapter(env) if self.env_adapter is not None else EnvironmentState()
-
-        # Judge every requested call, preserving original order.
         allowed: list[FunctionCall] = []
-        # verdicts[i] is None if allowed, else the denial Decision for tool_calls[i].
-        verdicts: list[Optional[Decision]] = []
+        reasons: list[Optional[str]] = []
         for tool_call in tool_calls:
-            action = self.mapper(tool_call)
-            if action is None:
+            reason = self._judge(tool_call, env)
+            reasons.append(reason)
+            if reason is None:
                 allowed.append(tool_call)
-                verdicts.append(None)
-                continue
-            decision = evaluate(action, self.policy, tb_env)
-            if decision.allowed:
-                allowed.append(tool_call)
-                verdicts.append(None)
-            else:
-                verdicts.append(decision)
 
-        # Fast path: nothing denied -> pure delegation, identical behavior.
-        if all(v is None for v in verdicts):
+        if all(r is None for r in reasons):
             return self.inner.query(query, runtime, env, messages, extra_args)
 
-        # Delegate execution of the allowed subset to the real ToolsExecutor by
-        # handing it a copy of the assistant message carrying only allowed calls.
         filtered_last = dict(messages[-1])
         filtered_last["tool_calls"] = allowed
         inner_input = [*messages[:-1], filtered_last]
         query, runtime, env, inner_out, extra_args = self.inner.query(
             query, runtime, env, inner_input, extra_args
         )
-        allowed_results = list(inner_out[len(inner_input):])
+        allowed_results = iter(inner_out[len(inner_input):])
 
-        # Reassemble tool results in the ORIGINAL order and restore the original
-        # assistant message, so the trace faithfully shows every requested call
-        # (including the denied ones) alongside its outcome.
         merged: list[ChatMessage] = []
-        allowed_iter = iter(allowed_results)
-        for tool_call, decision in zip(tool_calls, verdicts):
-            if decision is None:
-                merged.append(next(allowed_iter))
+        for tool_call, reason in zip(tool_calls, reasons):
+            if reason is None:
+                merged.append(next(allowed_results))
             else:
-                merged.append(self._denial_message(tool_call, decision))
+                merged.append(self._denial_message(tool_call, reason))
 
-        final_messages = [*messages, *merged]
-        return query, runtime, env, final_messages, extra_args
+        return query, runtime, env, [*messages, *merged], extra_args
+
+
+class TaskScopeExecutor(GatingExecutor):
+    """A4 -- deny any tool call whose action is outside the task's ``TaskPolicy``."""
+
+    name = "task_scope_executor"
+
+    def __init__(
+        self,
+        policy: TaskPolicy,
+        mapper: ActionMapper,
+        inner: Optional[BasePipelineElement] = None,
+        env_adapter: Optional[EnvAdapter] = None,
+    ) -> None:
+        super().__init__(inner)
+        self.policy = policy
+        self.mapper = mapper
+        self.env_adapter = env_adapter
+
+    def _judge(self, tool_call: FunctionCall, env: Env) -> Optional[str]:
+        action = self.mapper(tool_call)
+        if action is None:
+            return None
+        tb_env = self.env_adapter(env) if self.env_adapter is not None else EnvironmentState()
+        decision = evaluate(action, self.policy, tb_env)
+        if decision.allowed:
+            return None
+        return (
+            f"PolicyDenied: action outside the scope of task "
+            f"'{self.policy.task_id}'. {decision.reason}"
+        )
+
+
+class ToolAllowlistExecutor(GatingExecutor):
+    """A2 -- deny any tool call whose function is not on the vetted allowlist
+    (development-plan §6; the Shi et al. tool-description attack surface)."""
+
+    name = "tool_allowlist_executor"
+
+    def __init__(self, allowed_tools, inner: Optional[BasePipelineElement] = None) -> None:
+        super().__init__(inner)
+        self.allowed_tools = frozenset(allowed_tools)
+
+    def _judge(self, tool_call: FunctionCall, env: Env) -> Optional[str]:
+        if tool_call.function in self.allowed_tools:
+            return None
+        return f"ToolNotAllowed: '{tool_call.function}' is not on the task's tool allowlist."
+
+
+class EgressGateExecutor(GatingExecutor):
+    """A3 -- block egress calls carrying an out-of-scope canary (development-plan
+    §6 egress control). Inert on scenarios with no egress action."""
+
+    name = "egress_gate_executor"
+
+    def __init__(
+        self,
+        mapper: ActionMapper,
+        env_adapter: EnvAdapter,
+        inner: Optional[BasePipelineElement] = None,
+    ) -> None:
+        super().__init__(inner)
+        self.mapper = mapper
+        self.env_adapter = env_adapter
+
+    def _judge(self, tool_call: FunctionCall, env: Env) -> Optional[str]:
+        action = self.mapper(tool_call)
+        if action is None:
+            return None
+        tb_env = self.env_adapter(env)
+        token = tb_env.canary_in(action.payload)
+        if token is not None:
+            return f"EgressBlocked: payload carries out-of-scope canary {token!r}."
+        return None

@@ -53,3 +53,9 @@ class BenchScenario:
 
     def robust_script(self) -> tuple[FunctionCall, ...]:
         return self.benign_script
+
+    def allowed_tools(self) -> frozenset[str]:
+        """The vetted tool set for the A2 allowlist: the tools the benign task
+        needs. (A malicious call reusing an authorized tool is not blocked here --
+        that is the point: tool allowlists don't stop authorized-tool abuse.)"""
+        return frozenset(c.function for c in self.benign_script)

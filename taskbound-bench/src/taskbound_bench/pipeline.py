@@ -74,15 +74,20 @@ class ScriptedLLM(BasePipelineElement):
 def build_pipeline(
     system_prompt: str,
     llm: BasePipelineElement,
-    executor: BasePipelineElement,
+    loop_elements: Sequence[BasePipelineElement],
     *,
     max_iters: int = 15,
 ) -> AgentPipeline:
+    """Assemble ``[SystemMessage, InitQuery, llm, ToolsExecutionLoop([*loop_elements, llm])]``.
+
+    ``loop_elements`` is the executor (possibly a nested stack of defense gates)
+    followed by any advisory elements -- see ``defenses.build_loop_elements``.
+    """
     return AgentPipeline(
         [
             SystemMessage(system_prompt),
             InitQuery(),
             llm,
-            ToolsExecutionLoop([executor, llm], max_iters=max_iters),
+            ToolsExecutionLoop([*loop_elements, llm], max_iters=max_iters),
         ]
     )
