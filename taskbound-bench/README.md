@@ -14,8 +14,21 @@ and never vendored. AgentDojo pins Python `<3.13`, so this package requires
 
 - **M1 (de-risk) — done.** `TaskScopeExecutor` wraps AgentDojo's `ToolsExecutor`
   **by composition, no fork**. See [`M1_FINDINGS.md`](./M1_FINDINGS.md).
-- M3+ (in-memory HPC `TaskEnvironment`s, per-tool `ActionMapper`s, `EnvAdapter`,
-  full scored matrix) — not yet built.
+- **M3 (AgentDojo integration) — done.** An in-memory HPC `TaskEnvironment`
+  (`env.py`) + tools (`tools.py`) + the `hpc_action_mapper`/`hpc_env_adapter`
+  seams (`mapping.py`), assembled into the **real AgentDojo pipeline**
+  (`pipeline.py`) with a deterministic `ScriptedLLM` model stand-in, scored by
+  the thin `benchmark.py` runner into **USR/ASR**. First scenario
+  (`cross_project_read.log_note`) result:
+
+  | defense | USR | ASR | verdict |
+  |---|---|---|---|
+  | A0 (none) | 1.00 | 1.00 | VIOLATED |
+  | A4 (task-scope) | 1.00 | 0.00 | SECURE |
+
+  Enforcement cuts ASR 1.00 → 0.00 at zero utility cost. Drop a real
+  `OpenAILLM`/`AnthropicLLM` in place of `ScriptedLLM` for a genuine model run.
+- M4+ (remaining three consequences, attack registry, full matrix) — next.
 
 ## `TaskScopeExecutor`
 
