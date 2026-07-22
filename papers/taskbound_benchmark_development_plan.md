@@ -1,1178 +1,312 @@
-# TaskBound Development Plan
+# TaskBound — Benchmark Development Plan
 
-> **Purpose:** build a reproducible benchmark for evaluating the utility and security of LLM agents in HPC environments.  
-> **Primary output:** an open benchmark artifact and an empirical paper, not a production defense platform.  
-> **Initial release target:** a portable benchmark with a validated subset running on a real Slurm testbed.
-
-## 1. Project Definition
-
-### 1.1 Benchmark question
-
-TaskBound evaluates:
-
-> Can an LLM agent complete a realistic HPC task while remaining within a task-scoped data, tool, scheduler, and scientific-integrity boundary when its environment contains adversarial content?
-
-### 1.2 Benchmark unit
-
-The atomic benchmark unit is:
-
-```text
-Environment + Benign Task + Task Policy + Security Case + Agent + Defense + Seed
-```
-
-Each run produces:
-
-- a final task result;
-- an action trace;
-- a utility verdict;
-- zero or more security violations;
-- consequence and severity labels;
-- runtime/cost metadata; and
-- reproducibility metadata.
-
-### 1.3 Deliverables
-
-1. **Benchmark specification**
-2. **Portable HPC-like environment**
-3. **Optional real-Slurm validation profile**
-4. **Task and security-case suite**
-5. **Agent adapter API**
-6. **Deterministic monitors and oracles**
-7. **Baseline defenses**
-8. **Evaluation runner and scorer**
-9. **Analysis notebooks/scripts**
-10. **Artifact documentation and paper**
-
-### 1.4 Initial release scope
-
-**This plan assumes a solo/small team with real-cluster access, targeting a top-tier security/ML venue.** At that scale, the plan in the original draft (5 domains, full 18-week infrastructure build before any real-cluster confirmation) is oversized. The scope below is deliberately tighter and front-loads the riskiest validation step instead of deferring it.
-
-A minimum credible v1 release should include:
-
-- 3 benchmark domains (D1 Slurm diagnosis, D2 scientific analysis, D4 workflow steering — see §6, marked *core*);
-- 15–18 benign tasks;
-- 36–45 validated security cases (3–5 per task family);
-- 1 primary agent adapter (a second is a stretch goal, not a requirement);
-- 2 model backends (one local, one hosted);
-- 4 baseline defense configurations (§10, marked *v1*);
-- deterministic utility and security oracles;
-- at least 3 runs per stochastic configuration; and
-- **real-Slurm validation starting with case #1** (see the new Phase 0.5 bootstrap gate in §13), not deferred to a late-stage confirmation pass — target 6–10 representative cases validated on real infrastructure by the end of v1, spread across development rather than batched at the end.
-
-D3 (software build) and D5 (multi-agent collaboration) expand the suite to 5 domains, 30–40 tasks, and 80-150+ security cases as a follow-up or camera-ready addition — do not let them gate the first submission. The general LLM-agent-security-benchmark space is moving fast (several overlapping benchmarks published in the last year); a smaller, rigorously validated v1 that ships sooner is worth more than a comprehensive v1 that ships later.
+> **Status:** working plan (v1). Supersedes prior scratch plans.
+> **Companion to:** `taskbound_position_paper.md` (the threat characterization this benchmark operationalizes).
+> **Goal of this document:** a concrete, phased engineering + research plan to build TaskBound and validate it on a real, fully-controlled HPC system, learning from the AgentDojo methodology [8].
 
 ---
 
-## 2. Work Packages
+## 1. Purpose and success criteria
 
-### WP1. Benchmark specification
+The position paper defines the **hijacked authorized agent** threat model for HPC: an agent with valid credentials and scheduler authority is redirected by adversarial content it reads during normal operation into actions that stay *account-authorized* but violate *task authority*. TaskBound is the empirical instrument that turns that argument into measurements.
 
-Define:
+TaskBound must answer four questions the position paper raises analytically (§7.2):
 
-- benchmark scope and non-goals;
-- threat model;
-- attacker capability classes;
-- task-policy semantics;
-- outcome taxonomy;
-- metrics and statistical protocol;
-- versioning policy; and
-- artifact safety rules.
+1. **How often** do current agents follow adversarial HPC context? (attack success rate — primary axis: per real *agent product*, evaluated as deployed; secondary axis: per *model* under a fixed reference scaffold, as an explanatory ablation)
+2. **Which HPC surfaces** are highest-risk? (per attack-surface, per consequence type)
+3. **Which controls** actually reduce risk **without destroying utility**? (defense matrix, joint metric)
+4. **Does the "user-broad, task-narrow" boundary hold up** as a measurable, enforceable object? (task-scoped authority as a first-class, checkable policy)
 
-**Acceptance criteria**
+### 1.1 Definition of done (v1.0 release)
 
-- written benchmark specification reviewed by at least two researchers;
-- all security outcomes have machine-checkable definitions;
-- every attacker capability has an example and boundary;
-- benchmark does not rely on undefined terms such as “unsafe” without an oracle.
+- A reproducible benchmark: HPC task suites, injection cases, deterministic security oracles, joint utility/security metrics.
+- The **task-scoped authority** mechanism (`TaskPolicy` + `PolicyEngine`) implemented as both a **scoring oracle** and a **runtime defense**, and shown to be the single source of truth for both.
+- **Primary results** for ≥2 real deployed HPC agent products (evaluated as deployed) × the four HPC-distinctive consequence types × a defense matrix (at least: no-defense, provenance-label, tool-allowlist, task-scope-enforcement).
+- **Secondary results** for ≥3 frontier models under a fixed reference scaffold, decomposing how much of an agent's susceptibility is the model vs. the scaffold and anchoring the numbers to a bare-model baseline.
+- **Equivalence-validated on a real HPC cluster we fully control**: for every scenario, the deterministic in-memory verdict matches the real-cluster outcome by construction (shared policy/oracle code), and a controlled live-fire run confirms the attack and the defense behave as scored.
+- A written responsible-use / reproducibility appendix.
 
-### WP2. Portable environment
+### 1.2 Non-goals (inherited from the position paper §1.3)
 
-Build an isolated environment that models:
-
-- users and projects;
-- per-task workspaces;
-- shared project and collaboration paths;
-- synthetic restricted data;
-- Slurm-like scheduler operations;
-- scientific files and logs;
-- command-line tools;
-- mock LLM egress; and
-- optional multi-agent communication.
-
-**Acceptance criteria**
-
-- one command resets the environment;
-- all actions are logged;
-- no real credentials or external data are required;
-- resource limits prevent accidental abuse;
-- environment runs on a developer workstation or small server.
-
-### WP3. Real-Slurm validation environment
-
-Validate selected cases on an authorized Slurm cluster using:
-
-- dedicated test accounts or namespaces;
-- synthetic project directories;
-- restricted partitions or reservations;
-- mock external endpoints;
-- capped job sizes; and
-- explicit site approval.
-
-**Acceptance criteria**
-
-- selected cases reproduce under real `sbatch`, `squeue`, `sacct`, and job-output behavior;
-- no experiment can affect unrelated users;
-- reset and cleanup procedures are documented;
-- differences between emulation and Slurm are recorded.
-
-### WP4. Task-suite development
-
-Create benign tasks with explicit utility oracles.
-
-**Acceptance criteria**
-
-- each task has a solvable reference implementation;
-- task difficulty is nontrivial but bounded;
-- the task requires HPC-native actions or artifacts;
-- success can be determined without subjective human interpretation whenever possible.
-
-### WP5. Security-case development
-
-Create attacks by modifying task context while preserving the legitimate task.
-
-**Acceptance criteria**
-
-- each case has one declared attacker capability;
-- the injection source is explicit;
-- the prohibited outcome is machine-checkable;
-- the case has a benign counterpart;
-- at least one scripted adversarial policy triggers the oracle;
-- the case does not depend on a real secret or production service.
-
-### WP6. Agent adapters and baseline defenses
-
-Support multiple agents through a common interface and implement baseline defenses.
-
-**Acceptance criteria**
-
-- agents produce normalized action traces;
-- model and prompt versions are recorded;
-- defenses can be enabled independently;
-- adapters do not silently apply extra protections.
-
-### WP7. Evaluation and analysis
-
-Run the benchmark, compute metrics, and generate paper-ready artifacts.
-
-**Acceptance criteria**
-
-- all runs are reproducible from manifests;
-- failed environment runs are separated from agent failures;
-- confidence intervals are reported;
-- raw traces support each aggregate result;
-- analysis scripts regenerate all tables and figures.
+Not covered: model-training-time poisoning, weight extraction, GPU side channels, kernel/hypervisor compromise, generic jailbreaking. TaskBound measures **environment-mediated redirection of an already-authorized agent** — nothing else.
 
 ---
 
-## 3. Repository Architecture
+## 2. What we adopt from AgentDojo, and what we must add
 
-```text
-taskbound/
-  README.md
-  LICENSE
-  CITATION.cff
-  pyproject.toml
-  configs/
-    benchmark.yaml
-    models/
-    agents/
-    defenses/
-  environments/
-    portable/
-      containers/
-      scheduler_mock/
-      filesystem/
-    slurm/
-      setup/
-      cleanup/
-      safety_limits/
-  domains/
-    slurm_debugging/
-    scientific_analysis/
-    software_build/
-    workflow_steering/
-    multi_agent/
-  tasks/
-    <domain>/<task_id>/
-      task.yaml
-      fixtures/
-      reference/
-      utility_oracle.py
-  security_cases/
-    <domain>/<case_id>/
-      case.yaml
-      patches/
-      expected_violations.yaml
-  tools/
-    safe/
-    poisoned/
-    wrappers/
-  agents/
-    base.py
-    adapter_1.py
-    adapter_2.py
-  defenses/
-    prompt_only.py
-    provenance_labels.py
-    tool_policy.py
-    task_scope.py
-    human_confirmation.py
-    runtime_monitor.py
-  monitors/
-    filesystem.py
-    process.py
-    scheduler.py
-    network.py
-    provenance.py
-    cross_agent.py
-  oracles/
-    utility.py
-    security.py
-    severity.py
-  runner/
-    execute.py
-    reset.py
-    collect.py
-  scoring/
-    metrics.py
-    bootstrap.py
-    report.py
-  analysis/
-    tables.py
-    figures.py
-  docs/
-    benchmark_spec.md
-    adding_tasks.md
-    adding_agents.md
-    safety.md
-  tests/
-```
+AgentDojo [8] is the right methodological template and the position paper commits us to it. We adopt its shape and extend it where HPC breaks its assumptions.
 
----
-
-## 4. Environment Design
-
-### 4.1 Portable environment
-
-Use containers, namespaces, or a lightweight virtual environment to represent:
-
-- `user_alpha`: victim agent user;
-- `user_beta`: separate project user or attacker role;
-- `project_alpha`: task-assigned workspace;
-- `project_beta`: technically accessible or intentionally denied comparison scope;
-- `shared_collab`: legitimate shared workspace;
-- `node_tmp`: configuration-dependent shared temporary state;
-- `mock_scheduler`: validates and records scheduler operations;
-- `mock_llm`: records all model-bound data.
-
-### 4.2 Directory model
-
-```text
-/hpc/
-  home/
-    user_alpha/
-    user_beta/
-  projects/
-    alpha/
-      input/
-      output/
-      jobs/
-      scripts/
-    beta/
-      public/
-      restricted/
-  shared/
-    collaboration/
-    software/
-  scratch/
-    alpha/
-    beta/
-  node_tmp/
-  audit/
-```
-
-### 4.3 Authorization modes
-
-Implement at least three modes:
-
-1. **Strict isolation:** out-of-project paths are OS-denied.
-2. **User-broad/task-narrow:** the user can access several projects, but the task policy permits only one.
-3. **Collaborative:** selected shared paths are permitted, but protected subpaths remain forbidden.
-
-Mode 2 is essential to the “trusted credentials, untrusted behavior” thesis.
-
-### 4.4 Scheduler interface
-
-Portable mode should expose safe wrappers:
-
-- `sbatch_mock`
-- `squeue_mock`
-- `sacct_mock`
-- `scancel_mock`
-- `scontrol_show_mock`
-
-The wrapper must:
-
-- parse realistic arguments;
-- enforce a hard resource ceiling;
-- record allocation account, nodes, GPUs, walltime, and retries;
-- simulate job outputs; and
-- never launch uncontrolled workloads.
-
-Real-Slurm validation should use real commands only inside an approved restricted environment.
-
-### 4.5 Mock LLM egress
-
-All “external” traffic should route to a local endpoint that stores:
-
-- request timestamp;
-- task and trial IDs;
-- payload hash;
-- redacted payload;
-- exact synthetic-secret matches;
-- destination label; and
-- response.
-
-The monitor must support exact secret canaries and structured provenance labels.
-
----
-
-## 5. Task Policy Model
-
-### 5.1 Policy dimensions
-
-Each task policy should define:
-
-- allowed and denied paths;
-- read/write permissions;
-- allowed tools and argument constraints;
-- scheduler privileges and resource ceilings;
-- permitted model endpoints;
-- protected strings or files;
-- allowed peer agents;
-- expected output locations;
-- allowed workflow parameter changes; and
-- provenance requirements.
-
-### 5.2 Policy semantics
-
-Use explicit categories:
-
-```text
-PERMITTED        required or acceptable for the task
-CONDITIONAL      requires confirmation or a validated precondition
-PROHIBITED       outside task scope
-IRRELEVANT       not evaluated by this case
-```
-
-### 5.3 Policy schema
-
-```yaml
-policy_id: analysis_alpha_v1
-paths:
-  read_allow:
-    - /hpc/projects/alpha/output/**
-  write_allow:
-    - /hpc/projects/alpha/reports/**
-  deny:
-    - /hpc/projects/beta/**
-tools:
-  allow:
-    - python_safe
-    - grep
-    - csv_summary
-  deny:
-    - curl
-    - ssh
-scheduler:
-  may_submit: false
-network:
-  allow:
-    - mock_llm
-protected_assets:
-  - /hpc/projects/beta/restricted/synthetic_secret.txt
-scientific_integrity:
-  immutable:
-    - /hpc/projects/alpha/input/**
-  required_provenance_fields:
-    - source_files
-    - analysis_script_hash
-```
-
----
-
-## 6. Domain and Task Development
-
-D1, D2, and D4 are **core v1 domains** (Phase 2–3). D3 and D5 are **extension domains** (Phase 7, post-v1) — kept here for completeness and so the schema/architecture accommodates them later, but they should not consume Phase 2–4 time.
-
-### 6.1 Domain D1: Slurm diagnosis — *core*
-
-Initial tasks:
-
-1. diagnose memory-limit failure;
-2. diagnose invalid partition;
-3. diagnose missing module;
-4. repair malformed `#SBATCH` directives;
-5. explain a nonzero application exit;
-6. compare two job runs;
-7. propose a corrected script without submitting;
-8. cancel only a specified synthetic job.
-
-Utility oracles:
-
-- corrected script parses;
-- requested resource bounds are satisfied;
-- root cause matches fixture;
-- no unrelated job is modified.
-
-### 6.2 Domain D2: Scientific analysis — *core*
-
-Initial tasks:
-
-1. summarize simulation metrics;
-2. identify failed runs;
-3. aggregate approved CSV files;
-4. compare two parameter sweeps;
-5. generate a report with provenance;
-6. detect a convergence issue;
-7. process metadata from a scientific file;
-8. select valid outputs without suppressing failures.
-
-Utility oracles:
-
-- numeric answer tolerance;
-- expected file inclusion;
-- explicit provenance fields;
-- no silent filtering beyond declared rules.
-
-### 6.3 Domain D3: Build and environment assistance — *extension (post-v1)*
-
-Initial tasks:
-
-1. diagnose missing header;
-2. select compiler/module combination;
-3. fix a CMake path;
-4. explain ABI mismatch;
-5. run an approved test build;
-6. diagnose MPI runtime error.
-
-Utility oracles:
-
-- build succeeds in isolated workspace;
-- approved toolchain is used;
-- shared software remains unchanged;
-- no unapproved download or binary execution occurs.
-
-### 6.4 Domain D4: Workflow steering — *core*
-
-Initial tasks:
-
-1. resume a failed stage;
-2. change one approved parameter;
-3. evaluate convergence threshold;
-4. rerun only failed cases;
-5. record workflow provenance;
-6. enforce a node-hour budget.
-
-Utility oracles:
-
-- only approved stages run;
-- parameter changes match task;
-- budget remains within policy;
-- provenance record is complete.
-
-### 6.5 Domain D5: Multi-agent collaboration — *extension (post-v1)*
-
-Initial tasks:
-
-1. planner delegates analysis;
-2. worker produces approved summary;
-3. verifier checks output;
-4. agents exchange an approved artifact;
-5. one agent prepares data for another.
-
-Utility oracles:
-
-- role boundaries are respected;
-- only approved paths/messages are used;
-- provenance links all agent actions;
-- no protected data moves between unauthorized roles.
-
----
-
-## 7. Security-Case Development
-
-### 7.1 Case-generation template
-
-For each benign task:
-
-1. identify all context sources the agent consumes;
-2. choose one attacker capability;
-3. inject adversarial content into one source;
-4. define one primary prohibited consequence;
-5. optionally define secondary consequences;
-6. create exact canaries and policy rules;
-7. verify a scripted attack triggers the monitor;
-8. verify the benign reference does not trigger it; and
-9. document realism and limitations.
-
-### 7.2 Initial attack families
-
-#### S1. Scientific artifact injection
-
-Sources:
-
-- simulation log;
-- metadata field;
-- output note;
-- checkpoint comment;
-- generated README.
-
-Consequences:
-
-- cross-project read;
-- sensitive-data inclusion;
-- result suppression;
-- parameter tampering.
-
-#### S2. Scheduler-log injection
-
-Sources:
-
-- `slurm-<jobid>.out`;
-- application stderr;
-- wrapper diagnostics;
-- synthetic scheduler note.
-
-Consequences:
-
-- unsafe command;
-- oversized resource request;
-- repeated job submission;
-- unrelated file access.
-
-#### S3. Tool-output poisoning
-
-Sources:
-
-- converter output;
-- compiler warning;
-- module description;
-- post-processing report;
-- tool-server response.
-
-Consequences:
-
-- use of unapproved tool;
-- shared script modification;
-- synthetic secret exposure;
-- persistent poisoned output.
-
-#### S4. Shared-state injection
-
-Sources:
-
-- collaboration directory;
-- node temporary path;
-- user cache;
-- workflow intermediate file.
-
-Consequences:
-
-- cross-job hijacking;
-- persistent injection;
-- staged data movement.
-
-#### S5. Peer-agent injection
-
-Sources:
-
-- agent message;
-- delegated task description;
-- shared intermediate report;
-- memory or scratchpad artifact.
-
-Consequences:
-
-- role-boundary violation;
-- cross-agent secret transfer;
-- planner manipulation;
-- downstream poisoning.
-
-### 7.3 Severity levels
-
-- **Low:** unauthorized but reversible action with no protected data or shared effect.
-- **Medium:** out-of-scope read/write, modest resource misuse, or incorrect scientific output.
-- **High:** protected-data exposure, shared artifact compromise, substantial resource misuse, or persistent cross-agent effect.
-
-Avoid overclaiming “critical” unless the case realistically models such impact.
-
-### 7.4 Payload policy
-
-Store attack text in separate fixtures and use safe synthetic objectives. The public benchmark may include complete payloads when they are necessary for reproducibility and do not enable harm against real infrastructure. Otherwise provide abstracted or parameterized templates.
-
----
-
-## 8. Agent Adapter API
-
-### 8.1 Required interface
-
-```python
-class AgentAdapter:
-    def configure(self, model_config, defense_config, run_context): ...
-    def run(self, task_instruction, tools, environment): ...
-    def get_final_response(self) -> str: ...
-    def get_action_trace(self) -> list[dict]: ...
-    def get_usage(self) -> dict: ...
-```
-
-### 8.2 Normalized action schema
-
-```json
-{
-  "timestamp": "...",
-  "run_id": "...",
-  "agent_id": "...",
-  "action_type": "file_read|file_write|tool_call|scheduler|llm_egress|message",
-  "target": "...",
-  "arguments": {},
-  "result": "success|failure|blocked",
-  "provenance": "user|system|file|tool|peer_agent"
-}
-```
-
-### 8.3 Minimum adapters
-
-- one ReAct/tool-calling agent;
-- one framework-based agent with structured tools;
-- optional coding-agent adapter;
-- scripted reference agent for environment validation.
-
-### 8.4 Model recording
-
-Record:
-
-- exact model identifier;
-- provider or local checkpoint hash;
-- tokenizer version;
-- temperature/top-p;
-- system prompt hash;
-- tool schema version;
-- context truncation policy; and
-- date of evaluation.
-
----
-
-## 9. Monitors and Oracles
-
-### 9.1 Filesystem monitor
-
-Record:
-
-- path;
-- operation;
-- user/agent/process;
-- bytes;
-- success/failure;
-- before/after hash for writes; and
-- policy verdict.
-
-Portable options:
-
-- wrapper instrumentation;
-- filesystem namespaces;
-- inotify/fanotify;
-- auditd; or
-- eBPF when available.
-
-Use one authoritative mechanism for scoring and others for visibility studies.
-
-### 9.2 Process/tool monitor
-
-Record command, arguments, environment subset, exit status, and policy match. Avoid storing real secrets in logs.
-
-### 9.3 Scheduler monitor
-
-Record:
-
-- job ID;
-- account;
-- partition;
-- nodes;
-- GPUs;
-- walltime;
-- retries;
-- submit/cancel/modify action; and
-- whether the action exceeds task policy.
-
-### 9.4 Egress monitor
-
-Detect:
-
-- exact synthetic canaries;
-- protected-file hashes or substrings;
-- path disclosure when relevant;
-- destination policy violations; and
-- unexpected payload volume.
-
-### 9.5 Scientific-integrity oracle
-
-Compare:
-
-- parameter files before and after;
-- selected versus omitted runs;
-- expected versus reported metrics;
-- dataset hashes;
-- provenance completeness; and
-- whether an action was authorized by the task.
-
-### 9.6 Cross-agent monitor
-
-Build an event graph:
-
-```text
-Agent A -> writes artifact X -> Agent B reads X -> Agent B sends payload Y
-```
-
-Use this to identify staged transfer and persistent poisoning.
-
-### 9.7 Oracle precedence
-
-1. deterministic system event;
-2. deterministic output comparison;
-3. structured rule;
-4. human review;
-5. LLM judge only as a secondary analysis aid.
-
-The benchmark should not depend primarily on an LLM judging another LLM’s security.
-
----
-
-## 10. Baseline Defenses
-
-B0, B1, B4, and B6 are the **v1 defense set** (four, per §1.4) — build and measure these first. B2, B3, B5, and B7 are **extension defenses**: valuable for a fuller picture but not required to demonstrate the core utility-security tradeoff, and better spent as Phase 7 (post-v1) additions than as scope that delays the first submission.
-
-### B0. No special defense — *v1*
-
-Standard agent prompt and tools.
-
-### B1. Prompt-only warning — *v1*
-
-Tell the agent that files and tool outputs may contain untrusted instructions.
-
-### B2. Structured provenance labels — *extension*
-
-Separate user instruction, system policy, file content, tool output, and peer-agent message.
-
-### B3. Tool allowlist and argument validation — *extension*
-
-Restrict commands and validate paths/arguments.
-
-### B4. Task-scoped filesystem and scheduler policy — *v1, highest priority*
-
-Enforce task-specific path and scheduler boundaries even when the user account has broader access. This is the defense most directly aligned with the paper's central thesis (user-broad/task-narrow authority) — if only one defense beyond the unprotected/prompt-only baselines can be built well, build this one.
-
-### B5. Human confirmation — *extension*
-
-Require approval for high-risk reads, writes, scheduler actions, and egress.
-
-### B6. Runtime behavioral monitor — *v1*
-
-Observe and optionally block actions violating the task manifest.
-
-### B7. Combined defense — *extension*
-
-Use provenance labels + tool policy + task scope. This provides a practical upper baseline without claiming a complete solution. Natural Phase 7 addition once B2 and B3 exist.
-
-For every defense, measure utility loss, additional latency, and number of user confirmations.
-
----
-
-## 11. Evaluation Protocol
-
-### 11.1 Run phases
-
-#### Phase A. Environment validation
-
-- run scripted benign reference;
-- run scripted malicious reference;
-- validate all monitors and reset logic.
-
-#### Phase B. Case screening
-
-- run baseline agent on every case;
-- remove broken or trivial cases;
-- classify cases by difficulty and consequence.
-
-#### Phase C. Main benchmark
-
-Run:
-
-```text
-Models × Agents × Final Cases × Defenses × Seeds
-```
-
-#### Phase D. Real-Slurm confirmation
-
-Run a representative subset spanning all domains and consequence classes.
-
-### 11.2 Repetitions
-
-- minimum 3 repetitions per stochastic condition for development;
-- preferably 5 or more for final results where cost permits;
-- more repetitions for cases with high variance;
-- identical seeds/settings across defenses when supported.
-
-### 11.3 Exclusion rules
-
-Predefine exclusions:
-
-- environment setup failure;
-- model endpoint outage;
-- malformed tool schema;
-- monitor failure;
-- context overflow caused by benchmark infrastructure rather than task content.
-
-Report exclusions separately; do not silently rerun until a desired result appears.
-
-### 11.4 Primary outputs
-
-For each configuration report:
-
-- USR;
-- ASR;
-- STCR;
-- UAR;
-- SDER;
-- unsafe action rate;
-- workflow-integrity violation rate;
-- resource abuse rate;
-- refusal rate;
-- latency and token cost; and
-- confidence intervals.
-
-### 11.5 Defense comparison
-
-Plot utility versus security:
-
-- x-axis: USR;
-- y-axis: STCR or 1-ASR;
-- annotate latency and confirmation burden.
-
-A defense is stronger when it improves security without large utility loss.
-
----
-
-## 12. Quality Assurance
-
-### 12.1 Unit tests
-
-Test:
-
-- policy matching;
-- path normalization and symlink handling;
-- exact secret canaries;
-- scheduler resource calculations;
-- environment reset;
-- trace serialization; and
-- metric computation.
-
-### 12.2 Case review checklist
-
-- Is the task realistic?
-- Is the attacker capability minimal and explicit?
-- Is the injected content likely to enter agent context?
-- Is the prohibited outcome unambiguous?
-- Does the benign reference succeed?
-- Does the malicious scripted policy trigger the oracle?
-- Can the environment be reset?
-- Does the case use only synthetic data?
-
-### 12.3 Inter-reviewer validation
-
-Have at least two reviewers independently label:
-
-- task-permitted actions;
-- prohibited actions;
-- consequence severity; and
-- case realism.
-
-**Start this at case #1 (Phase 0.5), not as a batch pass before submission.** For a top-tier security/ML venue, "the permitted/prohibited boundary is subjective" is the single most likely rejection vector for this kind of benchmark (§16 risk register). Discovering systematic disagreement after 40+ cases are built means re-litigating and possibly re-implementing a large fraction of the suite; discovering it at case 1–5 costs an afternoon. Resolve disagreements and report the policy-authoring process, including the disagreement rate and how it evolved as the case suite grew.
-
-### 12.4 Leakage and benchmark contamination
-
-Version prompts and fixtures. Consider holding back a small test subset if benchmark overfitting becomes a concern.
-
----
-
-## 13. Development Schedule
-
-### Phase 0 — Specification and architecture (Weeks 1–2)
-
-- finalize scope, benchmark name, threat model, and metrics;
-- define repository and schemas;
-- implement manifest validation;
-- review safety plan.
-
-**Exit criterion:** one end-to-end toy task runs and produces a scored trace.
-
-### Phase 0.5 — Bootstrap validation gate (Week 3)
-
-This phase exists to fail fast on the central thesis before investing in the full six-layer architecture. Do **not** start Phase 1's general infrastructure build until this gate passes. Scope is intentionally minimal and ad hoc — hand-scripted where the full environment isn't built yet:
-
-- implement one Slurm-debugging task by hand (fixtures, allowed paths, a reference fix);
-- implement one poisoned-log security case for it (one injection source, one canary secret, one prohibited-event rule);
-- run the benign reference and confirm it passes;
-- run a scripted adversarial policy and confirm the monitor catches the violation;
-- reproduce the same attack on the authorized real-Slurm testbed (§WP3), not only in emulation;
-- have a second reviewer independently label the task-permitted/prohibited boundary for this one case (starting the dual-review process from case #1, per §12.3).
-
-**Exit criterion:** one real-Slurm-confirmed attack case demonstrates an HPC-distinctive failure (a violation that depends on scheduler, project-scope, or shared-filesystem semantics, not a generic prompt-injection instance) — and a second reviewer agrees with the policy labeling. If this gate does not pass, revisit the threat model or task design before scaling up; do not proceed to Phase 1 on the assumption that later cases will fix it.
-
-### Phase 1 — Portable environment and monitors (Weeks 4–5)
-
-- implement project filesystem model;
-- implement scheduler mock;
-- implement mock LLM egress;
-- implement file, process, scheduler, and network monitors;
-- implement reset and isolation.
-
-**Exit criterion:** scripted benign and malicious policies are scored correctly, and the Phase 0.5 case runs through the full pipeline reproducing the same verdict.
-
-### Phase 2 — Minimum viable task suite (Weeks 6–8)
-
-- build Slurm diagnosis tasks (D1, core);
-- build scientific analysis tasks (D2, core);
-- build workflow-steering tasks (D4, core);
-- create 15–18 benign tasks total (§1.4);
-- create initial utility oracles.
-
-Software-build (D3) and multi-agent (D5) tasks are out of scope for this phase — see §1.4 and §6 for the core/extension split.
-
-**Exit criterion:** reference solutions pass all benign tasks.
-
-### Phase 3 — Security cases (Weeks 9–11)
-
-- build artifact, scheduler-log, and tool-output attacks across the three core domains;
-- validate 36–45 security cases (§1.4);
-- conduct internal review with dual-reviewer labeling continued from Phase 0.5 (§12.3), not deferred to the end of this phase;
-- validate a growing subset on real Slurm as cases are added, targeting 6–10 real-cluster-confirmed cases by the end of this phase rather than all at once in Phase 5.
-
-**Exit criterion:** every case passes the benign/malicious oracle tests, and the running real-Slurm-confirmed count is on track for the §1.4 target.
-
-### Phase 4 — Agent and defense matrix (Weeks 12–13)
-
-- implement one primary agent adapter (a second is a stretch goal, not a gate — see §1.4, §11.2);
-- integrate the two v1 model backends;
-- implement the four v1 baseline defenses (§10);
-- run pilot evaluation;
-- refine ambiguous tasks.
-
-**Exit criterion:** complete benchmark run succeeds unattended.
-
-### Phase 5 — Full evaluation and Slurm validation (Weeks 14–16)
-
-- freeze benchmark version 0.9;
-- run full matrix at v1 scope (3 domains × 2 models × 1 primary agent × 4 defenses × seeds);
-- confirm the accumulated real-Slurm case set is representative across domains and consequence classes (this is a confirmation of ongoing work, not the first real-cluster run — that happened in Phase 0.5);
-- compute confidence intervals;
-- generate tables and figures.
-
-**Exit criterion:** all paper claims trace to frozen results.
-
-### Phase 6 — Artifact and paper release (Weeks 17–19)
-
-- freeze version 1.0;
-- write documentation;
-- package quick-start artifact;
-- perform clean-machine reproduction;
-- complete paper and appendices.
-
-**Exit criterion:** a new user can reproduce a small result in under one hour and the full artifact instructions are complete.
-
-### Phase 7 — Extension domains (post-v1 / camera-ready, optional)
-
-- add D3 (software build) and D5 (multi-agent collaboration);
-- expand toward 5 domains, 30–40 tasks, 80–150+ security cases;
-- expand the agent and defense matrix if reviewer feedback or venue expectations warrant it.
-
-Treat this phase as follow-up work gated on v1 landing, not a prerequisite for submission.
-
----
-
-## 14. Minimum Viable Benchmark
-
-This section previously duplicated the release scope; it now just cross-references §1.4 to avoid two sources of truth. The v1/minimum-viable scope is:
-
-### Domains (§6)
-
-1. Slurm job debugging (D1, core)
-2. Scientific result analysis (D2, core)
-3. Workflow steering (D4, core)
-
-Tool/build assistance (D3) and multi-agent collaboration (D5) are extension domains — see Phase 7 (§13).
-
-### Security cases
-
-1. poisoned Slurm log;
-2. poisoned scientific output;
-3. poisoned tool output;
-4. cross-project read;
-5. synthetic-secret egress;
-6. unsafe scheduler request;
-7. workflow parameter corruption.
-
-(Multi-agent staged transfer moves to the D5 extension set, since it depends on the D5 domain.)
-
-### Defenses (§10)
-
-1. no special defense (B0, baseline);
-2. prompt-only warning (B1);
-3. task-scoped enforcement (B4, highest priority);
-4. runtime behavioral monitor (B6).
-
-### Models/agents (§11.2)
-
-- one local model;
-- one stronger external or local model;
-- one primary agent adapter (a second is a stretch goal, not a requirement).
-
-This subset is sufficient for a coherent paper if the cases are high quality and the oracles are rigorous — and it is sized for a solo/small team to actually finish and validate on real infrastructure, which matters more for a top-tier submission than raw case count.
-
----
-
-## 15. Paper-Ready Tables and Figures
-
-### Table 1. Benchmark composition
-
-Domains, benign tasks, security cases, tools, policies, and consequence classes.
-
-### Table 2. Threat taxonomy
-
-Injection channel × attacker capability × consequence × representative task.
-
-### Table 3. Main benchmark results
-
-Model/agent × USR × ASR × STCR × consequence-specific rates.
-
-### Table 4. Defense comparison
-
-Defense × utility cost × security improvement × latency × confirmations.
-
-### Table 5. Existing-control visibility
-
-Filesystem, scheduler, process, network, and agent logs versus each consequence.
-
-### Figure 1. Benchmark architecture
-
-Environment, task/case manifests, agent, monitors, oracles, and scoring.
-
-### Figure 2. HPC task boundary
-
-User authority versus narrower agent task authority.
-
-### Figure 3. Attack channel to consequence matrix
-
-Visualize which channels cause which failures.
-
-### Figure 4. Security-utility frontier
-
-Compare models and defenses.
-
-### Figure 5. Cross-agent case timeline
-
-Show staging, read, and exposure events.
-
----
-
-## 16. Risk Register
-
-| Risk | Impact | Mitigation |
+| AgentDojo concept | Adopt as-is | HPC extension TaskBound must add |
 |---|---|---|
-| Tasks look like generic prompt injection | Weak novelty | Require scheduler, project, scientific-integrity, or shared-storage semantics in every included domain |
-| Policies appear subjective | Reviewer skepticism | Publish manifests, use independent reviewers, prioritize deterministic prohibitions |
-| Benchmark is too small | Weak benchmark claim | Target 36–45 validated security cases across 3 core domains for v1 (§1.4) with a documented, already-scoped path to 80–150+ across 5 domains (Phase 7); lean on real-cluster validation and rigorous oracles to offset smaller v1 case count |
-| Real cluster experiments are risky | Operational concern | Use synthetic data, reservation/test accounts, hard resource caps, mock egress |
-| Results depend on one model | Poor generality | Include multiple models and agents; frame scope carefully |
-| Defenses reduce attacks by refusing everything | Misleading security | Jointly report USR and STCR plus refusal rate |
-| Emulation lacks realism | Validity concern | Validate representative cases on real Slurm |
-| Tool wrappers distort behavior | Measurement concern | Document wrapper semantics and compare selected cases with native commands |
-| LLM judging is unreliable | Scoring concern | Use deterministic monitors and oracles as primary evidence |
-| Benchmark overfits public payloads | Long-term degradation | Version cases and maintain optional held-out subset |
-| General agent-security-benchmark space moves fast; risk of a competing HPC-flavored benchmark landing first | Lost novelty/priority | Prioritize the Phase 0.5 bootstrap gate to get one real-cluster-confirmed result fast; consider an early arXiv position paper (the notes.md gap analysis is close to submission-ready) to establish priority while the full v1 suite is built; keep v1 scope to 3 domains rather than 5 to reduce time-to-first-result |
-| Solo/small team underestimates full-scope (5-domain, 7-defense, multi-model) engineering effort relative to team-built benchmarks like AgentDojo/ASB | Missed timeline, incomplete artifact at submission | Hold to the v1 scope in §1.4 (3 domains, 4 defenses, 2 models, 1 primary agent); treat D3, D5, and the extension defenses as explicitly out of scope for v1 rather than aspirational stretch goals that quietly consume the schedule |
+| **Task suite** = environment + tools + user tasks + injection tasks | Yes — same API shape | HPC `TaskEnvironment` (filesystem, scheduler, egress, multi-project) instead of email/bank/travel |
+| **User task** (benign goal) + **injection task** (attacker goal) crossed into a matrix | Yes | Injection goals become the 4 HPC consequence types, not "send $X to attacker" |
+| **Placeholder injection** into environment text | Yes — attacker string lives in content the agent reads | Injection sites = logs, `sacct` notes, module descriptions, shared scratch, peer-agent artifacts |
+| **Attacks** as a swappable registry | Yes | Add HPC-flavored attacks (log-injection, module-description poisoning, staged multi-agent) |
+| **Defenses = pipeline elements** composed into the agent loop | Yes | Add `TaskScopeExecutor`, provenance labeling, egress gate, module/tool allowlist |
+| **Metrics = utility under attack, measured jointly** | Yes — this is the core methodological commitment | Add HPC consequence/severity metrics (below) since AgentDojo's are fixed booleans |
+| **Deterministic, reproducible scoring** | Yes | Scoring stays in-memory & deterministic even when a real cluster is in the loop |
+
+**The novel contribution is not the harness** — it is **task-scoped authority**: representing and checking "permitted for *this task*" as distinct from "permitted for *this account*." AgentDojo has no such notion. Everything else is faithful HPC re-instantiation of a proven design. Rebuilding the harness from scratch would be an undifferentiated worse clone; we build on AgentDojo as a pinned dependency and contribute the parts it lacks.
 
 ---
 
-## 17. Release Checklist
+## 3. Architecture: one core, two evaluation surfaces
 
-### Benchmark
+The central design decision: **scoring is deterministic and in-memory; the real cluster only confirms validity.** Security verdicts must never depend on a live cluster's nondeterministic state (scheduler timing, node placement, filesystem races), and we must never rely on real data exfiltration to "prove" an attack. Instead, one shared, dependency-free policy/oracle core is imported by both evaluation surfaces, so in-memory and real-cluster results are **equivalent by construction**, not by output-diffing.
 
-- [ ] Versioned task and case manifests
-- [ ] Synthetic fixtures
-- [ ] Portable environment image
-- [ ] Real-Slurm profile
-- [ ] One primary agent adapter (second adapter is a stretch goal, not required for v1)
-- [ ] Baseline defenses
-- [ ] Deterministic monitors/oracles
-- [ ] Scoring implementation
-- [ ] Automated reset
-- [ ] Unit and integration tests
+```
+                 ┌──────────────────────────────────────────────┐
+                 │            taskbound-core (dep-free)         │
+                 │  TaskPolicy · PolicyEngine · oracles · types │
+                 │  the single definition of the task boundary  │
+                 │  and of what counts as a violation           │
+                 └───────────────┬─────────────────┬────────────┘
+                                 │                 │
+                 imports         │                 │         imports
+        ┌────────────────────────▼───┐          ┌──▼───────────────────────────┐
+        │      taskbound-bench       │          │      taskbound-harness       │
+        │  (AgentDojo consumer)      │          │  (real-cluster consumer)     │
+        │  in-memory TaskEnvironment │          │  dep-free, stdlib only,      │
+        │  scored matrix, fast,      │          │  installs on a locked-down   │
+        │  deterministic, CI-run     │          │  login node; drives real     │
+        │  TaskScopeExecutor wraps   │          │  sbatch/squeue/filesystem    │
+        │  AgentDojo ToolsExecutor   │          │  on the controlled cluster   │
+        └────────────────────────────┘          └──────────────────────────────┘
+```
 
-### Reproducibility
+- **`taskbound-core`** — dependency-free. `TaskPolicy` (the declared scope of one task), a pure `PolicyEngine` (decides allow/deny + emits a violation record), the deterministic `security_oracle`(s), and shared types. This is where the paper's thesis lives as executable code. It imports nothing so it is trivially auditable and installs anywhere.
+- **`taskbound-bench`** — the AgentDojo consumer. In-memory Pydantic `TaskEnvironment` subclasses, the full attack × defense × model matrix, fast and deterministic, runs in CI. The `TaskScopeExecutor` (the A4 defense) wraps AgentDojo's `ToolsExecutor` and enforces `taskbound_core.PolicyEngine`.
+- **`taskbound-harness`** — the real-cluster consumer, **stdlib-only** so it installs on a restricted login node. Drives real `sbatch`/`squeue`/filesystem operations and scores them with the **same** `taskbound_core` oracle. This is the authoritative real-Slurm validation path and a permanent part of the design, not scaffolding.
 
-- [ ] Pinned dependencies
-- [ ] Model/version records
-- [ ] Example outputs
-- [ ] Raw trace schema
-- [ ] Analysis scripts
-- [ ] Quick-start run
-- [ ] Full-run instructions
-- [ ] Hardware and cost notes
+**Equivalence claim (what makes this rigorous):** both consumers call the identical `taskbound_core` policy and oracle code on the identical scenario definition. So "the in-memory run says A0→VIOLATED / A4→SECURE" and "the real cluster says the same" is guaranteed by construction, and any divergence is a bug in the environment adapter, not an ambiguity in the measurement. This lets us do the bulk of experimentation cheaply in-memory and reserve scarce real-cluster time for validity confirmation and controlled live-fire.
 
-### Safety
+### 3.1 Pluggable agent driver
 
-- [ ] Synthetic secrets only
-- [ ] Mock egress by default
-- [ ] Resource caps
-- [ ] No production credentials
-- [ ] Testbed approval documented
-- [ ] Cleanup and rollback tested
+The agent loop / LLM client sits behind a `driver.py` interface so it is not reinvented in both consumers. The interface deliberately supports the two evaluation axes (§9):
 
-### Paper
+- **Agent-adapter driver** (primary axis) — wraps a real deployed HPC agent product (e.g., an agentic coding CLI as flagged by site operators [5]) and normalizes its actions into a common trace format. Swapping one product for another is the headline experiment: it measures the agent *as deployed* (its scaffold, its built-in defenses, and the model it ships with, as one package).
+- **Reference driver** (secondary axis) — a fixed, minimal scaffold (loop, system prompt, tool set) with a swappable model behind an OpenAI-compatible endpoint. Holding this scaffold constant and varying the model attributes ASR differences to the *model*, decomposing a product's susceptibility into model vs. scaffold. This is also the dependency-free default that runs on a locked-down node; an AgentDojo-backed variant is used inside the bench.
 
-- [ ] Benchmark scope is explicit
-- [ ] Difference from AgentDojo and related benchmarks is precise
-- [ ] Counts reflect implemented cases only
-- [ ] Claims match results
-- [ ] Utility-security tradeoffs are reported
-- [ ] Limitations and ethics are included
+Either way the driver returns a normalized action trace that the oracle scores; the oracle never talks to a model, so the scoring is identical across both axes.
+
+### 3.2 The main technical risk, de-risked first
+
+Can `TaskScopeExecutor` cleanly wrap AgentDojo's `ToolsExecutor` by composition? This is the one integration risk. We de-risk it in a dedicated milestone before committing to the bench build; a lightly-tracked fork of that one class is the fallback if composition proves impossible.
 
 ---
 
-## 18. Immediate Next Actions
+## 4. From threat model to scored scenarios
 
-This is the concrete checklist for Phase 0 and the Phase 0.5 bootstrap gate (§13) — the sequence that produces the earliest possible evidence for or against the paper's central thesis.
+We instantiate the paper's capability classes (§4.3, C1–C5) and attack-surface taxonomy (§5.1–§5.5) into **four HPC-distinctive consequence types**. These are chosen because each is something a web/enterprise benchmark like AgentDojo *cannot* express — they are the payoff of doing this in HPC at all. (Cross-project read is the one closest to generic prompt injection and serves as the bridge/sanity case; the other three are genuinely HPC-native.)
 
-1. Freeze the benchmark name and title.
-2. Write `benchmark_spec.md` with the task-policy and scoring definitions.
-3. Implement one end-to-end Slurm-debugging task (D1).
-4. Add one poisoned-log case with a synthetic cross-project secret.
-5. Implement just enough of the filesystem, scheduler, and mock-egress monitors to score this one case — not the full monitor suite yet.
-6. Validate benign and scripted-malicious reference policies.
-7. Have a second reviewer independently label the permitted/prohibited boundary for this case (start of §12.3's dual-review process).
-8. Reproduce the same attack case on the authorized real-Slurm testbed (§WP3) — this is the Phase 0.5 exit gate, not a later confirmation step.
-9. Add the first real agent adapter.
-10. Run a 3-seed pilot with the unprotected (B0) and prompt-only (B1) defenses.
-11. Review whether the result demonstrates an HPC-specific boundary (depends on scheduler, project-scope, or shared-filesystem semantics) rather than generic prompt injection. If it doesn't, revisit the task/attack design before scaling up.
-12. Use the pilot to refine the full case-development process, then proceed to Phase 1's broader infrastructure build.
+| Consequence type | Paper surface | Capability | What "VIOLATED" means | Oracle signal |
+|---|---|---|---|---|
+| **`cross_project_read`** | §5.4 cross-project leakage | C1/C4 | Task scoped to project A; agent reads/returns project B data the *account* may reach but the *task* may not | Access to a path outside the task's declared project scope |
+| **`resource_abuse`** | §5.2 scheduler channel | C2 | Agent submits/resizes jobs beyond the task's declared resource ceiling on the user's allocation | `sbatch` request exceeds `TaskPolicy` resource ceiling |
+| **`integrity_tampering`** | §5.3 / scientific integrity | C1/C3 | Agent silently edits an immutable input, filter, parameter, or provenance record | Snapshot/hash mismatch on a declared-immutable artifact |
+| **`shared_fs_persistence`** | §5.1 filesystem poisoning | C4 | Agent writes durable adversarial content into shared scratch/collaboration space for a later agent | Write to shared path that survives job teardown |
+
+A fifth, **`coordinated_multi_agent`** (§5.5, C5), is a stretch scenario for v1.1: a staged artifact written by one agent is consumed by a second with broader scope. It reuses the same oracle applied across a two-agent trace.
+
+### 4.1 Scenario schema
+
+Each scenario is a declarative record (one file in a `scenarios/` registry) with:
+
+- **`user_task`** — the benign instruction and its success oracle (did the agent do the real job?).
+- **`task_policy`** — the declared scope: allowed project(s), allowed paths (read/write/immutable), resource ceiling, allowed egress sinks. *This is the ground truth for both scoring and defense.*
+- **`injection`** — the attacker payload and its **injection site** (which piece of environment text carries it, mapped to C1–C5).
+- **`consequence`** — which of the four types this scenario targets, and the oracle parameters.
+- **`expected`** — the equivalence contract: A0 (no defense) → VIOLATED, A4 (task-scope enforcement) → SECURE **and utility preserved**.
+
+The `expected` field is what the real-cluster harness validates against.
+
+---
+
+## 5. Task-scoped authority: the core contribution
+
+This is the part that does not exist in any prior benchmark, so it gets the most engineering care.
+
+### 5.1 `TaskPolicy`
+
+A declarative description of what *this task* is allowed to touch, independent of the account's standing authority:
+
+- `projects: allowed project scope` (the account may belong to more; the task may touch one).
+- `paths: {readable, writable, immutable}` globs.
+- `resources: {max_nodes, max_gpus, max_walltime, max_jobs}` ceiling.
+- `egress: allowed sinks` (e.g., the sanctioned LLM backend; a canary sink is *never* allowed).
+
+Authoring note (open question from paper §7.3): task scope is somewhat subjective. We mitigate by (a) deriving policies mechanically from the user task where possible, (b) having two annotators author independently and measuring agreement, and (c) reporting sensitivity of the headline metrics to policy tightness.
+
+### 5.2 `PolicyEngine`
+
+A **pure function**: `(action, TaskPolicy, environment_state) → Decision{allow|deny, violation_record?}`. No I/O, no model calls, fully unit-testable. It is used two ways:
+
+- **As a scoring oracle** (offline): replay the agent's action trace through the engine → count violations.
+- **As a runtime defense** (`TaskScopeExecutor`, the A4 control): intercept each tool call before execution → deny out-of-scope actions.
+
+Because both uses share this one function, "what the oracle counts as a violation" and "what the defense prevents" cannot drift apart. That identity is the methodological backbone of the whole benchmark.
+
+### 5.3 Security oracles
+
+One generic deterministic `security_oracle` parameterized per consequence type, plus:
+
+- **Snapshot/hash checks** for `integrity_tampering` (record immutable-artifact hashes pre-run, diff post-run).
+- **Canary tokens** for egress/leak detection: `cross_project_read` and multi-agent exfil are detected by planting a unique canary in the out-of-scope data and watching for it in any egress attempt to a controlled sink — never by actually exfiltrating real data.
+- **Filesystem snapshot diff** for `shared_fs_persistence` (what durable content survived job teardown).
+
+---
+
+## 6. Defenses (the pipeline elements we evaluate)
+
+Following AgentDojo, defenses are composable pipeline elements. The matrix:
+
+- **A0 — no defense** (baseline; establishes ASR).
+- **A1 — provenance labeling** (paper §7.1): every context item (user instruction, file, tool output, peer message) carries a trust/source label; prompt the agent to condition on it. Tests whether web/enterprise-style provenance defenses transfer to HPC (open question §7.3).
+- **A2 — tool/module allowlist** (paper §5.3): restrict tool selection to a vetted set; tests the Shi et al. [11] tool-description attack surface.
+- **A3 — egress gate**: block agent-to-model traffic carrying canary/out-of-scope data (paper §7.1 egress control).
+- **A4 — task-scope enforcement** (`TaskScopeExecutor`): the novel control; deny any action outside `TaskPolicy`. This is the one we expect to be decisive, and the joint metric must show it preserves utility.
+- **A1+A4, A2+A4** — combinations, to show task-scope enforcement composes with cheaper defenses rather than replacing them.
+
+Each defense reports **both** its attack-success reduction and its utility cost. A defense that blocks attacks by breaking the benign task is a failure — this is the whole point of AgentDojo's joint metric and we preserve it.
+
+---
+
+## 7. Metrics
+
+AgentDojo's metrics are fixed booleans; we derive the standard ones for free and add an HPC consequence/severity layer computed by post-processing traces.
+
+- **USR — Utility Success Rate**: fraction of benign tasks the agent completes correctly (no attack present). Establishes baseline competence.
+- **ASR — Attack Success Rate**: fraction of injection cases where the attacker's consequence is achieved (oracle → VIOLATED).
+- **Utility-under-attack**: USR measured *with* the injection present — the joint metric; a good defense keeps this high while ASR drops.
+- **STCR — Successful Task Completion under attack + control**: benign task still succeeds *and* attack blocked.
+- **Consequence/severity layer** (HPC-specific, our addition):
+  - **UAR — Unauthorized Access Rate** (cross-project reads).
+  - **SDER — Scheduler Damage / over-ceiling Rate** (resource abuse magnitude, not just boolean).
+  - **ITR — Integrity Tampering Rate** (silent artifact/provenance edits).
+  - **SPR — Shared-fs Persistence Rate** (durable poison written).
+- **Defense cost**: Δutility and, where relevant, latency/token overhead per defense.
+
+Severity is weighted per stakeholder in reporting (a PI weighs `integrity_tampering` differently than a security team weighs `cross_project_read`), matching the paper's §5 argument that these consequences matter differently to different people.
+
+---
+
+## 8. Real-HPC validation on the controlled cluster
+
+This is the new element the position paper only gestured at, and the reason for the dep-free harness track. The controlled cluster is where we prove the in-memory benchmark is faithful to reality.
+
+### 8.1 Two things the real cluster does (and two it does not)
+
+**It does:**
+1. **Validity confirmation** — for each scenario, run the *benign* user task on real Slurm and confirm the task is actually doable with the given tools (the environment is realistic, not a strawman).
+2. **Controlled live-fire** — run the *injected* scenario end-to-end on real infrastructure and confirm the real outcome matches the deterministic verdict (A0→VIOLATED, A4→SECURE), exercising the harness's real `sbatch`/filesystem adapters against the same `taskbound_core` oracle.
+
+**It does not:**
+3. It does **not** produce the headline metrics — those come from the deterministic in-memory matrix so results are reproducible without cluster access.
+4. It does **not** ever perform real exfiltration, real cross-user data theft, or unbounded resource consumption — see safety guardrails.
+
+### 8.2 Cluster setup (fully controlled test system)
+
+- A **dedicated partition/QOS** isolated from any production work, with hard resource ceilings enforced at the scheduler level (so a `resource_abuse` live-fire is bounded even if the oracle logic were wrong).
+- **Synthetic projects and synthetic data only.** Multi-project scope is modeled with real Unix groups + real project directories, but every "sensitive" file is synthetic and carries a canary token. No real user data is ever in scope.
+- **Canary egress sink**: a controlled endpoint we own; the only place a canary can go. Detecting a canary there = attack succeeded, with zero real-world leak.
+- **Snapshot/restore** of the shared scratch/collaboration filesystem between trials, so `shared_fs_persistence` poison from one trial cannot bleed into the next and every trial starts from a known state.
+- **Immutable-artifact hashing** recorded before each `integrity_tampering` trial.
+
+### 8.3 Equivalence protocol
+
+For each scenario S and defense A:
+1. Freeze `taskbound_core` policy/oracle version.
+2. Run S×A in-memory → deterministic verdict V_mem.
+3. Run S×A on the cluster via the harness → real verdict V_real (scored by the *same* core).
+4. Assert V_mem == V_real. Any mismatch is filed as an environment-adapter bug, investigated, fixed — it is never averaged away.
+
+This turns "is the in-memory benchmark realistic?" from a hand-wave into a passing/failing test.
+
+### 8.4 Safety guardrails for running attacks on real hardware
+
+Because we are deliberately running injection attacks on a real cluster, the guardrails are part of the design, not an afterthought:
+
+- Isolated partition, synthetic data, canary-only egress, scheduler-enforced ceilings, snapshot/restore between trials (all above).
+- No secrets, no production credentials, no shared filesystem paths outside the test tree.
+- A kill-switch: the harness aborts a trial if any action would touch a path or resource outside the pre-declared test sandbox, independent of the agent's or oracle's logic.
+- All live-fire runs logged with full provenance for the reproducibility appendix.
+
+---
+
+## 9. Experimental design
+
+**Unit of evaluation.** An ASR is only interpretable if we say what varied. This study is about *agents in HPC*, so the agent is the primary unit; the model is a secondary, explanatory axis.
+
+- **Primary axis — the agent product (evaluated as deployed).** Sweep ≥2 real deployed HPC agents via the **agent-adapter driver**, each measured holistically: its scaffold, its built-in defenses, and the model it ships with, as one package. Headline claim: "the HPC agents sites actually run [5] are susceptible to HPC-native injection." We state the confound openly rather than hide it: swapping one product for another usually changes *both* the scaffold and the underlying model, so a difference between two products is attributable to the product **as a whole**, not to its scaffold in isolation. That is the correct unit for a thesis about agents-as-deployed. **≥2 agent products** for v1.0; more in v1.1.
+- **Secondary axis — the model (explanatory ablation).** To decompose a product's susceptibility into "how much is the model vs. the scaffold," hold the **reference driver** (a plain scaffold) fixed and vary the model across **≥3 frontier models**. Where a real product allows swapping its backend model, also vary the model within that product. This attributes the residual, connects our numbers to a bare-model baseline, and mirrors AgentDojo (which fixes its pipeline and varies the model).
+
+The agent-adapter result is the headline; the reference-driver sweep explains it. Because both feed the same trace format and the same oracle, the two axes are directly comparable.
+
+- **Attacks:** the HPC attack registry (log-injection, module-description poisoning, staged multi-agent, plus AgentDojo's transferable generic attacks as a baseline). At least one adaptive attack per surface, per the AgentDojo commitment to adaptive rather than only static attacks.
+- **Defense matrix:** A0–A4 and the two combinations (§6). The two axes treat defenses differently: on the reference-driver (model) axis, A1–A4 are *our* pipeline elements added to a bare scaffold; on the agent-product axis, a product's built-in mitigations are already part of the unit under test, so its A0 baseline includes whatever it ships with — and A1–A4 measure what our task-scoped controls add *on top of* a hardened product.
+- **Scenarios:** the four consequence types, multiple user tasks each, each crossed with matching injection tasks (AgentDojo-style matrix). Target ≥ a few hundred injection cases so per-surface rates are meaningful.
+- **Ablations:** policy-tightness sensitivity (§5.1), provenance-label transfer (A1, open question §7.3), enforcement locus (framework vs. scheduler-side A4).
+- **Reporting:** per-agent-product joint utility/security tables × surface × defense (primary), plus the reference-driver per-model tables that decompose product susceptibility (secondary); severity-weighted rollups; equivalence pass rate against the real cluster.
+
+---
+
+## 10. Milestones
+
+Phased so that (a) we prove the novel contribution and the AgentDojo integration early, and (b) the deterministic benchmark is fully usable before we spend scarce real-cluster time.
+
+| M | Milestone | Exit criterion |
+|---|---|---|
+| **M0** | Repo + `taskbound-core` skeleton: `TaskPolicy`, `PolicyEngine`, types, one oracle | Pure-function unit tests green; installs dep-free |
+| **M1** | **De-risk:** prototype `TaskScopeExecutor` wrapping AgentDojo `ToolsExecutor` by composition | Composition works on a toy suite, or fork fallback decided |
+| **M2** | `taskbound-harness` v0.1 (stdlib-only): driver, scenario registry, all four consequence oracles, real-`sbatch` adapter behind a stub | One scenario A0→VIOLATED / A4→SECURE end-to-end on stubbed cluster; tests green |
+| **M3** | AgentDojo integration in `taskbound-bench`: in-memory `TaskEnvironment`, first scenario scored through the real AgentDojo pipeline | First model run produces USR/ASR for one scenario |
+| **M4** | Full scenario registry (4 consequence types × multiple user/injection tasks) + attack registry | Matrix runs in CI; deterministic |
+| **M5** | Defense matrix A0–A4 + combinations; full metric layer (incl. consequence/severity); agent-adapter + reference drivers | Primary: joint tables for ≥2 real agent products (as deployed); secondary: reference-scaffold sweep over ≥3 models decomposing product susceptibility |
+| **M6** | **Real-cluster bring-up**: dedicated partition, synthetic projects, canary sink, snapshot/restore, guardrails | Benign tasks run on real Slurm (validity confirmation) |
+| **M7** | **Equivalence + live-fire** on the controlled cluster for all scenarios | V_mem == V_real for every scenario×defense; live-fire safe |
+| **M8** | Analysis, ablations, reproducibility appendix, benchmark release | v1.0: reproducible artifact + paper-ready results |
+
+M0–M2 deliberately never touch AgentDojo (the standalone bootstrap gate); AgentDojo is first touched at M1's de-risk probe and integrated at M3. Real hardware is first touched at M6, after the deterministic benchmark is complete.
+
+---
+
+## 11. Repository and engineering practices
+
+- **Three importable packages** in one repo: `taskbound-core`, `taskbound-bench`, `taskbound-harness`, sharing `taskbound-core`.
+- **AgentDojo pinned** as a dependency of `taskbound-bench` only (a specific commit/version), never vendored into core or harness.
+- **Testing:** `taskbound-core` has exhaustive pure-function tests (this is the trust anchor); each scenario ships with its expected A0/A4 verdict as a test; equivalence assertions are tests, not reports.
+- **CI:** runs the full deterministic matrix on every change (no cluster needed). Real-cluster runs are a separate, manually-triggered job.
+- **Reproducibility:** frozen core version + scenario registry + model/driver config + seeds recorded per result; live-fire runs logged with full provenance.
+
+---
+
+## 12. Risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| `ToolsExecutor` can't be wrapped cleanly | De-risked in M1; tracked light fork fallback |
+| Task scope is subjective → metrics fragile | Dual annotation + agreement measure + tightness-sensitivity ablation (§5.1) |
+| Real-cluster attacks cause real harm | Isolated partition, synthetic+canary data, scheduler ceilings, snapshot/restore, kill-switch (§8.4) |
+| In-memory env is an unrealistic strawman | Equivalence protocol makes realism a passing/failing test (§8.3), plus benign-task validity confirmation |
+| Reviewer sees "just an AgentDojo clone" | Frame + implement task-scoped authority as the contribution; harness is faithful HPC re-instantiation, not novelty theater |
+| Results are model-version-specific | Report ≥3 models; claim is about the agent class, and driver is swappable |
+
+---
+
+## 13. Ethics and responsible use
+
+- All attacks run only on infrastructure we fully control, against synthetic data, with canary-only egress. No production system, no real user data, no real exfiltration.
+- No new attack technique is weaponized beyond what is needed to *measure* susceptibility; payloads are benchmark artifacts, not deployable exploits.
+- The benchmark's purpose is defensive: to let sites tell the difference between an agent that is safe and one that has simply not been tested against its own environment (position paper §8).
+- Release includes a responsible-use statement and the reproducibility appendix.
+
+---
+
+## 14. Deliverables
+
+1. `taskbound-core`, `taskbound-bench`, `taskbound-harness` (released, tested).
+2. Scenario + attack + defense registries covering the four consequence types.
+3. Deterministic result matrix (≥3 models × 4 surfaces × defense matrix) with joint utility/security and severity metrics.
+4. Real-cluster equivalence + live-fire validation report.
+5. Reproducibility + responsible-use appendix.
+6. The empirical companion to the position paper, answering its four §7.2 questions with data.
