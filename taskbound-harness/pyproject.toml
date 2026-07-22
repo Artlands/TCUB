@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "taskbound-harness"
+version = "0.1.0"
+description = "Stdlib-only real-cluster consumer of taskbound-core: the permanent real-Slurm validation path (pluggable driver, scenario registry, cluster adapters). Installs on a locked-down login node."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "TaskBound" }]
+keywords = ["hpc", "slurm", "agent-security", "benchmark"]
+# Only dependency is taskbound-core, which is itself stdlib-only -> the whole
+# harness installs with no third-party wheels.
+dependencies = ["taskbound-core"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv.sources]
+taskbound-core = { path = "../taskbound-core", editable = true }
