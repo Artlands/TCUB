@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "taskbound-bench"
+version = "0.1.0"
+description = "AgentDojo consumer of taskbound-core: the in-memory scored matrix and the TaskScopeExecutor (A4) defense that enforces task-scoped authority inside AgentDojo's pipeline."
+readme = "README.md"
+# AgentDojo pins <3.13; taskbound-bench follows it.
+requires-python = ">=3.10,<3.13"
+license = { text = "Apache-2.0" }
+authors = [{ name = "TaskBound" }]
+dependencies = [
+    # AgentDojo is pinned to an exact version; TaskBound extends it, never vendors it.
+    "agentdojo==0.1.35",
+    "taskbound-core",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# taskbound-core lives in a sibling directory in this monorepo.
+[tool.uv.sources]
+taskbound-core = { path = "../taskbound-core", editable = true }
